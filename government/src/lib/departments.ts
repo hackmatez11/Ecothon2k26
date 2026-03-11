@@ -71,7 +71,7 @@ export const departments: Department[] = [
     ]
   },
   {
-    title: "Water Department",
+    title: "Water Resources Department",
     description: "Manage water quality monitoring and oil spill detection",
     icon: Droplets,
     color: "bg-blue-500",
@@ -97,11 +97,19 @@ export const departments: Department[] = [
         color: "bg-red-500",
         path: "/oil-spill",
         stats: "32 Detected"
+      },
+      {
+        title: "Water Analysis",
+        description: "AI-powered image analysis for water pollution",
+        icon: Brain,
+        color: "bg-indigo-500",
+        path: "/water-analysis",
+        stats: "Instant Analysis"
       }
     ]
   },
   {
-    title: "Industrial Regulation",
+    title: "Industrial Regulation Department",
     description: "Regulate industrial compliance and handle complaints",
     icon: Factory,
     color: "bg-orange-500",
@@ -139,7 +147,7 @@ export const departments: Department[] = [
     ]
   },
   {
-    title: "Administration",
+    title: "Administration Department",
     description: "Handle administrative tasks, budget, and communication",
     icon: ClipboardList,
     color: "bg-purple-500",
