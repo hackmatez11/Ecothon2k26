@@ -1,34 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wind, TrendingUp, MessageCircle, ClipboardList } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
-const trendData = [
-  { month: "Jan", aqi: 180 }, { month: "Feb", aqi: 160 }, { month: "Mar", aqi: 140 },
-  { month: "Apr", aqi: 120 }, { month: "May", aqi: 150 }, { month: "Jun", aqi: 170 },
-  { month: "Jul", aqi: 130 }, { month: "Aug", aqi: 110 }, { month: "Sep", aqi: 145 },
-  { month: "Oct", aqi: 190 }, { month: "Nov", aqi: 220 }, { month: "Dec", aqi: 200 },
-];
-
-const sourceData = [
-  { name: "Vehicles", value: 35, color: "#3b82f6" },
-  { name: "Factories", value: 28, color: "#ef4444" },
-  { name: "Construction", value: 18, color: "#f59e0b" },
-  { name: "Waste Burning", value: 12, color: "#8b5cf6" },
-  { name: "Other", value: 7, color: "#6b7280" },
-];
+import { Wind, MessageCircle, Users, CheckCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { departments } from "@/lib/departments";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+
+  const overallStats = [
+    { title: "Overall AQI", value: "185", sub: "Unhealthy", icon: Wind, color: "text-destructive" },
+    { title: "Total Complaints", value: "342", sub: "+28 today", icon: MessageCircle, color: "text-info" },
+    { title: "Active Personnel", value: "156", sub: "Across all depts", icon: Users, color: "text-primary" },
+    { title: "System Efficiency", value: "87%", sub: "+5% this month", icon: CheckCircle, color: "text-success" },
+  ];
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Environmental Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">NEMAP Government Dashboard</h1>
+        <div className="text-sm text-muted-foreground">National Environmental Management Authority | Pakistan</div>
+      </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: "Current AQI", value: "185", sub: "Unhealthy", icon: Wind, color: "text-destructive" },
-          { title: "Predicted Range", value: "150-210", sub: "Next 7 days", icon: TrendingUp, color: "text-warning" },
-          { title: "Active Complaints", value: "342", sub: "+28 today", icon: MessageCircle, color: "text-info" },
-          { title: "Active Tasks", value: "89", sub: "12 overdue", icon: ClipboardList, color: "text-primary" },
-        ].map((card) => (
+        {overallStats.map((card) => (
           <Card key={card.title}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
@@ -42,59 +35,77 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Pollution Trend (Monthly AQI)</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Area type="monotone" dataKey="aqi" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Pollution Sources</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={sourceData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={2}>
-                  {sourceData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2 mt-4">
-              {sourceData.map((s) => (
-                <div key={s.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full" style={{ background: s.color }} />
-                    <span className="text-muted-foreground">{s.name}</span>
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Department Dashboards</h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          {departments.map((dept) => (
+            <Card key={dept.title} className="cursor-pointer hover:shadow-lg transition-all border-l-4 border-l-transparent hover:border-l-primary" onClick={() => navigate(dept.path)}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className={`p-3 rounded-lg ${dept.color} bg-opacity-10`}>
+                    <dept.icon className={`h-8 w-8 ${dept.color.replace('bg-', 'text-')}`} />
                   </div>
-                  <span className="font-medium text-foreground">{s.value}%</span>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Department</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <CardTitle className="text-lg mb-2">{dept.title}</CardTitle>
+                <p className="text-sm text-muted-foreground mb-4">{dept.description}</p>
+                
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {dept.stats.map((stat, index) => (
+                    <div key={index} className="text-center p-2 bg-muted/50 rounded-lg">
+                      <div className="text-lg font-semibold text-foreground">{stat.value}</div>
+                      <div className="text-xs text-muted-foreground">{stat.label}</div>
+                      <div className="text-xs text-muted-foreground">{stat.status}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Tools & Features:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {dept.features.map((feature, index) => (
+                      <button 
+                        key={index} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(feature.path);
+                        }}
+                        className="text-xs px-2.5 py-1 bg-muted hover:bg-primary/20 hover:text-primary rounded-full transition-colors font-medium border border-transparent hover:border-primary/30"
+                      >
+                        {feature.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Real-Time Pollution Map</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
         <CardContent>
-          <div className="aspect-[16/7] bg-accent rounded-lg flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Wind className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>Interactive pollution map with real-time sensor data</p>
-              <p className="text-xs mt-1">Integration with mapping service required</p>
-            </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { action: "File Complaint", dept: "Industrial Regulation", color: "bg-red-500", path: "/complaints" },
+              { action: "Check Air Quality", dept: "Environmental", color: "bg-green-500", path: "/environmental" },
+              { action: "Report Oil Spill", dept: "Water Resources", color: "bg-blue-500", path: "/oil-spill" },
+              { action: "Submit Budget", dept: "Administration", color: "bg-purple-500", path: "/budget" },
+            ].map((item, index) => (
+              <button
+                key={index}
+                onClick={() => navigate(item.path)}
+                className={`p-3 rounded-lg ${item.color} bg-opacity-10 hover:bg-opacity-20 transition-colors text-left`}
+              >
+                <p className="font-medium text-sm text-foreground">{item.action}</p>
+                <p className="text-xs text-muted-foreground mt-1">{item.dept}</p>
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>

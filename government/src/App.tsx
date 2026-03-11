@@ -7,6 +7,10 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
+import EnvironmentalDashboard from "./pages/EnvironmentalDashboard";
+import WaterResourcesDashboard from "./pages/WaterResourcesDashboard";
+import IndustrialRegulationDashboard from "./pages/IndustrialRegulationDashboard";
+import AdministrationDashboard from "./pages/AdministrationDashboard";
 import PollutionPrediction from "./pages/PollutionPrediction";
 import PollutionSources from "./pages/PollutionSources";
 import TaskManagement from "./pages/TaskManagement";
@@ -34,6 +38,10 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/environmental" element={<EnvironmentalDashboard />} />
+            <Route path="/water-resources" element={<WaterResourcesDashboard />} />
+            <Route path="/industrial-regulation" element={<IndustrialRegulationDashboard />} />
+            <Route path="/administration" element={<AdministrationDashboard />} />
             <Route path="/pollution-prediction" element={<PollutionPrediction />} />
             <Route path="/pollution-sources" element={<PollutionSources />} />
             <Route path="/task-management" element={<TaskManagement />} />

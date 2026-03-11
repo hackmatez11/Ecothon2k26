@@ -1,0 +1,154 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Droplets, Ship, Waves, AlertTriangle, Activity } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import { useNavigate } from "react-router-dom";
+import { departments } from "@/lib/departments";
+
+const waterQualityData = [
+  { month: "Jan", quality: 72, contamination: 28 },
+  { month: "Feb", quality: 75, contamination: 25 },
+  { month: "Mar", quality: 68, contamination: 32 },
+  { month: "Apr", quality: 70, contamination: 30 },
+  { month: "May", quality: 65, contamination: 35 },
+  { month: "Jun", quality: 62, contamination: 38 },
+  { month: "Jul", quality: 60, contamination: 40 },
+  { month: "Aug", quality: 64, contamination: 36 },
+  { month: "Sep", quality: 69, contamination: 31 },
+  { month: "Oct", quality: 73, contamination: 27 },
+  { month: "Nov", quality: 76, contamination: 24 },
+  { month: "Dec", quality: 78, contamination: 22 },
+];
+
+const spillData = [
+  { month: "Jan", spills: 3 }, { month: "Feb", spills: 2 }, { month: "Mar", spills: 4 },
+  { month: "Apr", spills: 1 }, { month: "May", spills: 3 }, { month: "Jun", spills: 5 },
+  { month: "Jul", spills: 2 }, { month: "Aug", spills: 3 }, { month: "Sep", spills: 1 },
+  { month: "Oct", spills: 2 }, { month: "Nov", spills: 3 }, { month: "Dec", spills: 2 },
+];
+
+const WaterResourcesDashboard = () => {
+  const navigate = useNavigate();
+  const deptData = departments.find(d => d.title === "Water Resources Department")!;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-blue-500/5 p-6 rounded-xl border border-blue-500/20">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Droplets className="h-6 w-6 text-blue-500" />
+            {deptData.title}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">NEMAP Water Quality & Resource Management</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+            Deploy Water Sensors
+          </button>
+          <button className="px-4 py-2 bg-white text-blue-600 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors shadow-sm">
+            Reservoir Analysis
+          </button>
+        </div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { title: "Water Quality Index", value: "78%", sub: "Good", icon: Droplets, color: "text-blue-500" },
+          { title: "Active Spills", value: "3", sub: "This month", icon: Ship, color: "text-red-500" },
+          { title: "Monitoring Points", value: "156", sub: "All active", icon: Waves, color: "text-cyan-500" },
+          { title: "Alert Level", value: "Moderate", sub: "2 active", icon: AlertTriangle, color: "text-orange-500" },
+        ].map((card) => (
+          <Card key={card.title} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground font-medium">{card.title}</span>
+                <card.icon className={`h-5 w-5 ${card.color}`} />
+              </div>
+              <div className="text-3xl font-bold text-foreground">{card.value}</div>
+              <div className="text-sm text-muted-foreground mt-1">{card.sub}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Water Quality Trend</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={waterQualityData}>
+                <defs>
+                  <linearGradient id="colorQuality" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 }} />
+                <Area type="monotone" dataKey="quality" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorQuality)" strokeWidth={3} />
+                <Area type="monotone" dataKey="contamination" stroke="hsl(var(--destructive))" fill="none" strokeWidth={2} strokeDasharray="5 5" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Oil Spill Incidents</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={spillData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 }} />
+                <Line type="monotone" dataKey="spills" stroke="hsl(var(--destructive))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--destructive))", strokeWidth: 2, stroke: "white" }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
+          <Activity className="h-5 w-5 text-blue-500" />
+          Hydrological Monitoring Tools
+        </h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {deptData.features.map((feature) => (
+            <Card key={feature.title} className="cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all border-border hover:border-primary/50" onClick={() => navigate(feature.path)}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className={`p-2.5 rounded-xl ${feature.color} bg-opacity-10`}>
+                    <feature.icon className={`h-6 w-6 ${feature.color.replace('bg-', 'text-')}`} />
+                  </div>
+                  <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground bg-muted px-2 py-1 rounded-full">{feature.stats}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <CardTitle className="text-base mb-1.5">{feature.title}</CardTitle>
+                <p className="text-xs text-muted-foreground leading-relaxed">{feature.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <Card className="overflow-hidden border-blue-500/20">
+        <CardHeader className="bg-blue-500/5"><CardTitle className="text-lg">Interactive Watershed Map</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <div className="aspect-[16/6] bg-accent/30 flex items-center justify-center relative">
+            <div className="text-center text-muted-foreground z-10">
+              <Waves className="h-10 w-10 mx-auto mb-2 text-blue-400 opacity-60 animate-pulse" />
+              <p className="font-medium">Real-time watershed monitoring network</p>
+              <p className="text-xs mt-1">Satellite data integration active</p>
+            </div>
+            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_70%)]" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default WaterResourcesDashboard;
