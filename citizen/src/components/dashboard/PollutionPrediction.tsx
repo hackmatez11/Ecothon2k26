@@ -1,15 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
-const predictionData = [
-  { day: "Today", aqi: 145 },
-  { day: "Tomorrow", aqi: 160 },
-  { day: "Day 3", aqi: 155 },
-  { day: "Day 4", aqi: 140 },
-  { day: "Day 5", aqi: 130 },
-  { day: "Day 6", aqi: 120 },
-  { day: "Day 7", aqi: 110 },
-];
+import { useEffect, useState } from "react";
+import { useProfile } from "@/hooks/useProfile";
+import { fetchAQIData, generateForecast, PredictionData } from "@/lib/environmental";
+import { Loader2, Brain } from "lucide-react";
 
 const sources = [
   { name: "Traffic", value: 45, color: "hsl(210, 100%, 50%)" },
@@ -19,35 +13,77 @@ const sources = [
 ];
 
 export function PollutionPrediction() {
+  const { profile, loading: profileLoading } = useProfile();
+  const [forecast, setForecast] = useState<PredictionData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadForecast() {
+      if (profile?.city) {
+        const data = await fetchAQIData(profile.city, profile.latitude, profile.longitude);
+        setForecast(generateForecast(data.aqi));
+        setLoading(false);
+      } else if (!profileLoading) {
+        const data = await fetchAQIData("New Delhi", 28.6139, 77.2090);
+        setForecast(generateForecast(data.aqi));
+        setLoading(false);
+      }
+    }
+    loadForecast();
+  }, [profile, profileLoading]);
+
+  if (profileLoading || loading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="h-[350px] flex items-center justify-center"><Loader2 className="animate-spin" /></Card>
+        <Card className="h-[350px] flex items-center justify-center"><Loader2 className="animate-spin" /></Card>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Air Pollution Forecast (7 Days)</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Brain className="h-4 w-4 text-primary" /> Air Pollution Forecast (7 Days)
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={predictionData}>
+            <AreaChart data={forecast}>
               <defs>
                 <linearGradient id="aqiGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Area type="monotone" dataKey="aqi" stroke="hsl(142, 71%, 35%)" fill="url(#aqiGrad)" strokeWidth={2} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip 
+                contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="aqi" 
+                stroke="hsl(var(--primary))" 
+                fill="url(#aqiGrad)" 
+                strokeWidth={2} 
+                animationDuration={1500}
+              />
             </AreaChart>
           </ResponsiveContainer>
+          <div className="mt-2 text-[10px] text-center text-muted-foreground uppercase tracking-wider font-semibold">
+            Predicted AQI levels for {profile?.city || "your region"}
+          </div>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Pollution Sources</CardTitle>
+          <CardTitle className="text-base">Pollution Sources Breakdown</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center gap-6">
+        <CardContent className="flex flex-col sm:flex-row items-center gap-6">
           <ResponsiveContainer width={150} height={150}>
             <PieChart>
               <Pie data={sources} cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={3} dataKey="value">
@@ -57,11 +93,13 @@ export function PollutionPrediction() {
               </Pie>
             </PieChart>
           </ResponsiveContainer>
-          <div className="space-y-2">
+          <div className="space-y-2 w-full">
             {sources.map((s) => (
-              <div key={s.name} className="flex items-center gap-2 text-sm">
-                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />
-                <span className="text-foreground">{s.name}</span>
+              <div key={s.name} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="text-muted-foreground">{s.name}</span>
+                </div>
                 <span className="font-bold text-foreground">{s.value}%</span>
               </div>
             ))}
