@@ -31,6 +31,7 @@ import VoiceComplaint from "./pages/VoiceComplaint";
 import EcoProducts from "./pages/EcoProducts";
 import SoilAnalysis from "./pages/SoilAnalysis";
 import WaterAnalysis from "./pages/WaterAnalysis";
+import SiteTransformation from "./pages/SiteTransformation";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/eco-products" element={<EcoProducts />} />
             <Route path="/soil-analysis" element={<SoilAnalysis />} />
             <Route path="/water-analysis" element={<WaterAnalysis />} />
+            <Route path="/site-transformation" element={<SiteTransformation />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

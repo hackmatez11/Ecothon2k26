@@ -1,7 +1,7 @@
 import { 
   Leaf, Droplets, Factory, ClipboardList, 
   Brain, PieChart, Mountain, Ship, 
-  MessageCircle, Mic, MessageSquare, Wallet
+  MessageCircle, Mic, MessageSquare, Wallet, MapPin
 } from "lucide-react";
 
 export interface Feature {
@@ -225,6 +225,14 @@ export const departments: Department[] = [
         color: "bg-red-500",
         path: "/citizen-complaints/waste",
         stats: "Active issues"
+      },
+      {
+        title: "Site Transformation",
+        description: "Generate AI plans for site cleanup and beautification",
+        icon: MapPin,
+        color: "bg-emerald-500",
+        path: "/site-transformation",
+        stats: "AI Planning"
       }
     ]
   },
