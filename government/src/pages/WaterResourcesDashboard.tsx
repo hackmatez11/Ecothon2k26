@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Droplets, Ship, Waves, AlertTriangle, Activity } from "lucide-react";
+import { Droplets, Ship, Waves, AlertTriangle, Activity, MessageCircle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
@@ -131,6 +131,21 @@ const WaterResourcesDashboard = () => {
               </CardContent>
             </Card>
           ))}
+          
+          <Card className="cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all border-blue-500/30 bg-blue-500/5 hover:border-blue-500" onClick={() => navigate("/citizen-complaints/water")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-blue-500 bg-opacity-10">
+                  <MessageCircle className="h-6 w-6 text-blue-500" />
+                </div>
+                <span className="text-[10px] font-bold tracking-wider uppercase text-blue-500 bg-blue-500/10 px-2 py-1 rounded-full">New Reports</span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <CardTitle className="text-base mb-1.5 text-blue-600">Citizen Complaints</CardTitle>
+              <p className="text-xs text-muted-foreground leading-relaxed">View and respond to AI-categorized water pollution reports from citizens.</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

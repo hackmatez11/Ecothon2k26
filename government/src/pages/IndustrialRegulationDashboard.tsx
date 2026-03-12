@@ -120,6 +120,21 @@ const IndustrialRegulationDashboard = () => {
               </CardContent>
             </Card>
           ))}
+
+          <Card className="cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all border-orange-500/30 bg-orange-500/5 hover:border-orange-500" onClick={() => navigate("/citizen-complaints/pollution")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-orange-500 bg-opacity-10">
+                  <MessageCircle className="h-6 w-6 text-orange-500" />
+                </div>
+                <span className="text-[10px] font-bold tracking-wider uppercase text-orange-500 bg-orange-500/10 px-2 py-1 rounded-full">New Reports</span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <CardTitle className="text-base mb-1.5 text-orange-600">Citizen Complaints</CardTitle>
+              <p className="text-xs text-muted-foreground leading-relaxed">View and respond to AI-categorized industrial pollution complaints from citizens.</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

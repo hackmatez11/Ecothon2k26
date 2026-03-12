@@ -11,6 +11,13 @@ import EnvironmentalDashboard from "./pages/EnvironmentalDashboard";
 import WaterResourcesDashboard from "./pages/WaterResourcesDashboard";
 import IndustrialRegulationDashboard from "./pages/IndustrialRegulationDashboard";
 import AdministrationDashboard from "./pages/AdministrationDashboard";
+import { 
+  AgriculturalDashboard, 
+  WasteDashboard, 
+  ForestDashboard, 
+  SoilConservationDashboard 
+} from "./pages/NewDashboards";
+import CitizenComplaints from "./pages/CitizenComplaints";
 import PollutionPrediction from "./pages/PollutionPrediction";
 import PollutionSources from "./pages/PollutionSources";
 import TaskManagement from "./pages/TaskManagement";
@@ -43,6 +50,14 @@ const App = () => (
             <Route path="/water-resources" element={<WaterResourcesDashboard />} />
             <Route path="/industrial-regulation" element={<IndustrialRegulationDashboard />} />
             <Route path="/administration" element={<AdministrationDashboard />} />
+            
+            <Route path="/agricultural" element={<AgriculturalDashboard />} />
+            <Route path="/waste" element={<WasteDashboard />} />
+            <Route path="/forest" element={<ForestDashboard />} />
+            <Route path="/soil-conservation" element={<SoilConservationDashboard />} />
+            
+            <Route path="/citizen-complaints/:dept" element={<CitizenComplaints />} />
+            
             <Route path="/pollution-prediction" element={<PollutionPrediction />} />
             <Route path="/pollution-sources" element={<PollutionSources />} />
             <Route path="/task-management" element={<TaskManagement />} />

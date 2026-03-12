@@ -133,7 +133,7 @@ export const departments: Department[] = [
         description: "Manage and track pollution complaints",
         icon: MessageCircle,
         color: "bg-blue-500",
-        path: "/complaints",
+        path: "/citizen-complaints/pollution",
         stats: "342 Active"
       },
       {
@@ -181,6 +181,94 @@ export const departments: Department[] = [
         color: "bg-purple-500",
         path: "/budget",
         stats: "$2.4M Budget"
+      }
+    ]
+  },
+  {
+    title: "Agricultural Department",
+    description: "Monitor crop health, pesticide use, and farming impact",
+    icon: Leaf,
+    color: "bg-yellow-600",
+    path: "/agricultural",
+    stats: [
+      { label: "Crop Yield", value: "+12%", status: "Above avg" },
+      { label: "Pesticide Alerts", value: "4", status: "Low risk" },
+      { label: "Irrigation Sites", value: "245", status: "Operational" }
+    ],
+    features: [
+      {
+        title: "Citizen Complaints",
+        description: "Address agricultural and farming-related issues",
+        icon: MessageCircle,
+        color: "bg-yellow-500",
+        path: "/citizen-complaints/agriculture",
+        stats: "Active issues"
+      }
+    ]
+  },
+  {
+    title: "Waste Department",
+    description: "Manage urban waste and illegal dumping reports",
+    icon: ClipboardList,
+    color: "bg-red-600",
+    path: "/waste",
+    stats: [
+      { label: "Waste Collected", value: "45t", status: "Daily avg" },
+      { label: "Illegal Sites", value: "23", status: "Under cleanup" },
+      { label: "Recycling Rate", value: "34%", status: "+5% increase" }
+    ],
+    features: [
+      {
+        title: "Citizen Complaints",
+        description: "Handle illegal dumping and waste disposal reports",
+        icon: MessageCircle,
+        color: "bg-red-500",
+        path: "/citizen-complaints/waste",
+        stats: "Active issues"
+      }
+    ]
+  },
+  {
+    title: "Forest Department",
+    description: "Protect wildlife, forests, and biodiversity",
+    icon: Mountain,
+    color: "bg-emerald-600",
+    path: "/forest",
+    stats: [
+      { label: "Forest Cover", value: "24%", status: "Target: 33%" },
+      { label: "Active Patrols", value: "12", status: "24/7" },
+      { label: "Wildlife Sightings", value: "45", status: "Increased" }
+    ],
+    features: [
+      {
+        title: "Citizen Complaints",
+        description: "Report deforestation or wildlife incidents",
+        icon: MessageCircle,
+        color: "bg-emerald-500",
+        path: "/citizen-complaints/forest",
+        stats: "Active issues"
+      }
+    ]
+  },
+  {
+    title: "Soil Conservation Department",
+    description: "Monitor soil health and prevent degradation",
+    icon: Mountain,
+    color: "bg-amber-700",
+    path: "/soil-conservation",
+    stats: [
+      { label: "Soil Health Index", value: "72", status: "Fair" },
+      { label: "Erosion Zones", value: "18", status: "Critical" },
+      { label: "Restore Projects", value: "34", status: "Active" }
+    ],
+    features: [
+      {
+        title: "Citizen Complaints",
+        description: "Address soil erosion and contamination reports",
+        icon: MessageCircle,
+        color: "bg-amber-500",
+        path: "/citizen-complaints/soil",
+        stats: "Active issues"
       }
     ]
   }

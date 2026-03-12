@@ -1,19 +1,23 @@
 import {
   LayoutDashboard, Map, TrendingUp, MessageSquare, Search,
-  Mic, ShoppingBag, Lightbulb, Shield, TreePine
+  Mic, ShoppingBag, Lightbulb, Shield, TreePine, AlertCircle, LogOut, User
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  useSidebar,
+  SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const items = [
   { title: "Dashboard", url: "/citizen-dashboard", icon: LayoutDashboard },
+  { title: "Submit Complaint", url: "/citizen-dashboard/complaint", icon: AlertCircle },
   { title: "Live Map", url: "/citizen-dashboard/map", icon: Map },
   { title: "Pollution Prediction", url: "/citizen-dashboard/prediction", icon: TrendingUp },
-  { title: "Report Complaint", url: "/citizen-dashboard/report", icon: MessageSquare },
+  { title: "Report Issue", url: "/citizen-dashboard/report", icon: MessageSquare },
   { title: "Track Complaint", url: "/citizen-dashboard/track", icon: Search },
   { title: "Voice Complaint", url: "/citizen-dashboard/voice", icon: Mic },
   { title: "Eco Products Bot", url: "/citizen-dashboard/eco-bot", icon: ShoppingBag },
@@ -24,7 +28,15 @@ const items = [
 
 export function CitizenSidebar() {
   const { state } = useSidebar();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const collapsed = state === "collapsed";
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("Signed out successfully");
+    navigate("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -54,6 +66,28 @@ export function CitizenSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-3 space-y-2">
+        {!collapsed && user && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-sidebar-accent/30">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <User className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-sidebar-foreground truncate">{user.email}</p>
+              <p className="text-[10px] text-sidebar-foreground/50">Citizen</p>
+            </div>
+          </div>
+        )}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleSignOut} className="w-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors">
+              <LogOut className="mr-2 h-4 w-4 shrink-0" />
+              {!collapsed && <span>Sign Out</span>}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }

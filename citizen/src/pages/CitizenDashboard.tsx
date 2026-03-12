@@ -13,6 +13,7 @@ import { EcoBot } from "@/components/dashboard/EcoBot";
 import { EnvironmentalTips } from "@/components/dashboard/EnvironmentalTips";
 import { EnvironmentalAlerts } from "@/components/dashboard/EnvironmentalAlerts";
 import { CitizenParticipation } from "@/components/dashboard/CitizenParticipation";
+import SubmitComplaint from "@/pages/SubmitComplaint";
 
 function DashboardHome() {
   return (
@@ -52,6 +53,7 @@ export default function CitizenDashboard() {
               <Route path="tips" element={<EnvironmentalTips />} />
               <Route path="actions" element={<GovernmentActions />} />
               <Route path="participate" element={<CitizenParticipation />} />
+              <Route path="complaint" element={<SubmitComplaint />} />
             </Routes>
           </main>
         </div>
