@@ -18,7 +18,7 @@ import {
   Download,
   Printer
 } from "lucide-react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { analyzeImageWithPrompt } from "../services/groqVision";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -49,6 +49,8 @@ const SiteTransformation = () => {
   const [location, setLocation] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState<SiteTransformationPlan | null>(null);
+  const [afterImage, setAfterImage] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,6 +59,7 @@ const SiteTransformation = () => {
       reader.onloadend = () => {
         setImage(reader.result as string);
         setResults(null);
+        setAfterImage(null);
       };
       reader.readAsDataURL(file);
     }
@@ -70,24 +73,6 @@ const SiteTransformation = () => {
 
     setAnalyzing(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        toast.error("Gemini API key not found in environment variables.");
-        setAnalyzing(false);
-        return;
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-      const base64Data = image.split(",")[1];
-      const part = {
-        inlineData: {
-          data: base64Data,
-          mimeType: "image/jpeg",
-        },
-      };
-
       const prompt = `Analyze this image of an unhygienic site at location: "${location}". 
       Generate a detailed transformation plan to turn it into a clean, beautiful, and sustainable site.
       
@@ -103,24 +88,140 @@ const SiteTransformation = () => {
 
       Focus on professional, realistic site remediation steps. Do not include any markdown or code blocks.`;
 
-      const result = await model.generateContent([prompt, part]);
-      const response = await result.response;
-      const text = response.text().trim();
+      const response = await analyzeImageWithPrompt(image, prompt);
       
       try {
-        const cleanJson = text.replace(/```json|```/g, "").trim();
+        const cleanJson = response.replace(/```json|```/g, "").trim();
         const jsonResult = JSON.parse(cleanJson);
         setResults(jsonResult);
         toast.success("Transformation plan generated successfully!");
+        
+        // Trigger after-image generation
+        generateAfterImage(image, jsonResult.siteType);
       } catch (parseError) {
-        console.error("Error parsing AI response:", text);
+        console.error("Error parsing AI response:", response);
         toast.error("Error parsing AI response. Please try again.");
       }
     } catch (error) {
       console.error("Error generating plan:", error);
-      toast.error("Process failed. Please verify your connection and API key.");
+      toast.error("Process failed. Please verify your connection and Groq API key.");
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const generateAfterImage = async (sourceImage: string, siteType: string) => {
+    setGeneratingImage(true);
+    try {
+      const apiKey = import.meta.env.VITE_STABILITY_API_KEY;
+      if (!apiKey) {
+        throw new Error("Stability API key not found");
+      }
+
+      // Convert base64 to blob and resize to supported dimensions
+      const base64Data = sourceImage.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const originalBlob = new Blob([byteArray], { type: 'image/jpeg' });
+
+      // Create image to get dimensions and resize
+      const img = new Image();
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+
+          // Use 1024x1024 for best results (square format)
+          const targetWidth = 1024;
+          const targetHeight = 1024;
+          
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          
+          // Draw and resize image
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Could not create blob from canvas'));
+            }
+          }, 'image/jpeg', 0.9);
+        };
+        
+        img.onerror = () => reject(new Error('Could not load image'));
+        img.src = URL.createObjectURL(originalBlob);
+      });
+
+      const prompt = `clean urban environment, remove garbage and waste, add green plants and trees, clean road, beautiful public space, transformed ${siteType}, highly detailed, photorealistic`;
+
+      // Create form data for multipart/form-data request
+      const formData = new FormData();
+      
+      // Add resized init image
+      formData.append('init_image', imageBlob, 'source.jpg');
+      
+      // Add text prompt
+      formData.append('text_prompts[0][text]', prompt);
+      formData.append('text_prompts[0][weight]', '1.0');
+      
+      // Add negative prompt to preserve good elements
+      formData.append('text_prompts[1][text]', 'garbage, waste, trash, pollution, dirty, unhygienic');
+      formData.append('text_prompts[1][weight]', '-0.8');
+      
+      // Image-to-image parameters (35% strength = 65% transformation)
+      formData.append('init_image_mode', 'IMAGE_STRENGTH');
+      formData.append('image_strength', '0.35');
+      
+      // Generation parameters
+      formData.append('cfg_scale', '7');
+      formData.append('samples', '1');
+      formData.append('steps', '30');
+      formData.append('sampler', 'K_DPMPP_2M');
+      formData.append('style_preset', 'photographic');
+
+      const response = await fetch(
+        'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Stability API Error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.artifacts && result.artifacts.length > 0) {
+        const imageBase64 = result.artifacts[0].base64;
+        const fullImageUrl = `data:image/png;base64,${imageBase64}`;
+        setAfterImage(fullImageUrl);
+        toast.success("AI After-Image visualization generated!");
+      } else {
+        throw new Error("No image generated");
+      }
+    } catch (error) {
+      console.error("Error generating after image:", error);
+      toast.error("Failed to generate AI concept image. Using text plan only.");
+    } finally {
+      setGeneratingImage(false);
     }
   };
 
@@ -143,9 +244,9 @@ const SiteTransformation = () => {
         </div>
       </header>
 
-      <div className="grid lg:grid-cols-12 gap-8">
+      <div className="space-y-8">
         {/* INPUT SECTION */}
-        <div className="lg:col-span-4 space-y-8">
+        <div className="max-w-4xl mx-auto space-y-8">
           <Card className="bg-[#111] border-emerald-500/10 rounded-3xl overflow-hidden shadow-2xl relative hover:border-emerald-500/30 transition-colors">
             <CardHeader className="border-b border-emerald-500/10 bg-emerald-500/5 p-6">
               <CardTitle className="text-xl flex items-center gap-3 font-bold text-emerald-400 uppercase tracking-tight">
@@ -229,13 +330,13 @@ const SiteTransformation = () => {
         </div>
 
         {/* RESULTS SECTION */}
-        <div className="lg:col-span-8">
+        <div className="max-w-6xl mx-auto">
           <AnimatePresence mode="wait">
             {results ? (
               <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 className="space-y-8"
               >
                 {/* HEADLINE STATS */}
@@ -257,6 +358,70 @@ const SiteTransformation = () => {
                     </div>
                   ))}
                 </div>
+
+                {/* VISUAL TRANSFORMATION */}
+                <Card className="bg-[#111] border-emerald-500/10 rounded-3xl overflow-hidden shadow-2xl relative">
+                  <CardHeader className="border-b border-emerald-500/10 bg-emerald-500/5 p-6">
+                    <CardTitle className="text-xl flex items-center justify-between font-bold text-emerald-400 uppercase tracking-tight">
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="h-5 w-5" />
+                        AI Vision Transformation
+                      </div>
+                      {generatingImage && (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400/70 font-bold bg-emerald-500/10 px-4 py-1.5 rounded-full border border-emerald-500/20">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Rendering concept...
+                        </div>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-emerald-500/10">
+                      {/* Before */}
+                      <div className="relative group p-6">
+                        <div className="absolute top-8 left-8 z-10 bg-neutral-900/80 backdrop-blur-md text-white px-3 py-1 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 shadow-xl">
+                          Current State
+                        </div>
+                        <div className="rounded-2xl overflow-hidden ring-1 ring-white/10 aspect-video bg-neutral-900">
+                          {image && <img src={image} alt="Before" className="w-full h-full object-cover grayscale-[20%] contrast-125" />}
+                        </div>
+                      </div>
+                      
+                      {/* After */}
+                      <div className="relative group p-6 bg-emerald-950/20">
+                        <div className="absolute top-8 left-8 z-10 bg-emerald-500/90 backdrop-blur-md text-white px-3 py-1 text-xs font-black uppercase tracking-widest rounded-lg shadow-xl shadow-emerald-500/20">
+                          Projected Future
+                        </div>
+                        <div className="rounded-2xl overflow-hidden ring-2 ring-emerald-500/30 aspect-video bg-[#0A0A0A] relative">
+                          <AnimatePresence>
+                            {afterImage ? (
+                              <motion.img 
+                                initial={{ opacity: 0, scale: 1.05 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                src={afterImage} 
+                                alt="After" 
+                                className="w-full h-full object-cover" 
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-emerald-500/40 p-6 text-center">
+                                {generatingImage ? (
+                                  <>
+                                    <Sparkles className="h-12 w-12 mb-4 animate-pulse opacity-50" />
+                                    <p className="text-sm font-bold uppercase tracking-widest">Synthesizing Vision<br/>Based on Plan Parameters...</p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Brain className="h-12 w-12 mb-4 opacity-50" />
+                                    <p className="text-sm font-bold uppercase tracking-widest">Awaiting AI Image Generation</p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* MAIN PLAN BODY */}
                 <div className="bg-white text-[#0A0A0A] rounded-[2rem] shadow-2xl overflow-hidden border-[16px] border-neutral-900 min-h-[800px] flex flex-col md:flex-row print:border-none print:shadow-none">
