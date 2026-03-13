@@ -1,7 +1,7 @@
 import { 
   Leaf, Droplets, Factory, ClipboardList, 
   Brain, PieChart, Mountain, Ship, 
-  MessageCircle, Mic, MessageSquare, Wallet, MapPin
+  MessageCircle, Mic, MessageSquare, Wallet, MapPin, Users, Trees, Trash2
 } from "lucide-react";
 
 export interface Feature {
@@ -67,6 +67,14 @@ export const departments: Department[] = [
         color: "bg-orange-500",
         path: "/soil-analysis",
         stats: "45 Sites"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-indigo-500",
+        path: "/officers/environmental",
+        stats: "Manage Team"
       }
     ]
   },
@@ -105,6 +113,14 @@ export const departments: Department[] = [
         color: "bg-indigo-500",
         path: "/water-analysis",
         stats: "Instant Analysis"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-cyan-500",
+        path: "/officers/water-resources",
+        stats: "Manage Team"
       }
     ]
   },
@@ -143,6 +159,14 @@ export const departments: Department[] = [
         color: "bg-green-500",
         path: "/voice-complaint",
         stats: "89 Today"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-amber-500",
+        path: "/officers/industrial-regulation",
+        stats: "Manage Team"
       }
     ]
   },
@@ -181,6 +205,14 @@ export const departments: Department[] = [
         color: "bg-purple-500",
         path: "/budget",
         stats: "$2.4M Budget"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-violet-500",
+        path: "/officers/administration",
+        stats: "Manage Team"
       }
     ]
   },
@@ -203,6 +235,14 @@ export const departments: Department[] = [
         color: "bg-yellow-500",
         path: "/citizen-complaints/agriculture",
         stats: "Active issues"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-yellow-600",
+        path: "/officers/agricultural",
+        stats: "Manage Team"
       }
     ]
   },
@@ -233,6 +273,14 @@ export const departments: Department[] = [
         color: "bg-emerald-500",
         path: "/site-transformation",
         stats: "AI Planning"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-red-600",
+        path: "/officers/waste",
+        stats: "Manage Team"
       }
     ]
   },
@@ -255,6 +303,14 @@ export const departments: Department[] = [
         color: "bg-emerald-500",
         path: "/citizen-complaints/forest",
         stats: "Active issues"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-emerald-600",
+        path: "/officers/forest",
+        stats: "Manage Team"
       }
     ]
   },
@@ -277,6 +333,14 @@ export const departments: Department[] = [
         color: "bg-amber-500",
         path: "/citizen-complaints/soil",
         stats: "Active issues"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage department officers and their responsibilities",
+        icon: Users,
+        color: "bg-amber-700",
+        path: "/officers/soil-conservation",
+        stats: "Manage Team"
       }
     ]
   }

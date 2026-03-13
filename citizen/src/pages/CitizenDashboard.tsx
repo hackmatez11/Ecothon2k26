@@ -13,6 +13,7 @@ import { EcoBot } from "@/components/dashboard/EcoBot";
 import { EnvironmentalTips } from "@/components/dashboard/EnvironmentalTips";
 import { EnvironmentalAlerts } from "@/components/dashboard/EnvironmentalAlerts";
 import { CitizenParticipation } from "@/components/dashboard/CitizenParticipation";
+import { SoilAnalysis } from "@/components/dashboard/SoilAnalysis";
 import SubmitComplaint from "@/pages/SubmitComplaint";
 
 function DashboardHome() {
@@ -45,6 +46,7 @@ export default function CitizenDashboard() {
             <Routes>
               <Route index element={<DashboardHome />} />
               <Route path="map" element={<LiveEnvironmentalMap />} />
+              <Route path="soil-analysis" element={<SoilAnalysis />} />
               <Route path="prediction" element={<PollutionPrediction />} />
               <Route path="report" element={<ReportIssue />} />
               <Route path="track" element={<ComplaintTracking />} />

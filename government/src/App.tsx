@@ -33,6 +33,14 @@ import SoilAnalysis from "./pages/SoilAnalysis";
 import WaterAnalysis from "./pages/WaterAnalysis";
 import SiteTransformation from "./pages/SiteTransformation";
 import NotFound from "./pages/NotFound";
+import EnvironmentalOfficers from "./pages/officers/EnvironmentalOfficers";
+import WaterResourcesOfficers from "./pages/officers/WaterResourcesOfficers";
+import IndustrialRegulationOfficers from "./pages/officers/IndustrialRegulationOfficers";
+import AdministrationOfficers from "./pages/officers/AdministrationOfficers";
+import AgriculturalOfficers from "./pages/officers/AgriculturalOfficers";
+import WasteOfficers from "./pages/officers/WasteOfficers";
+import ForestOfficers from "./pages/officers/ForestOfficers";
+import SoilConservationOfficers from "./pages/officers/SoilConservationOfficers";
 
 const queryClient = new QueryClient();
 
@@ -73,6 +81,15 @@ const App = () => (
             <Route path="/soil-analysis" element={<SoilAnalysis />} />
             <Route path="/water-analysis" element={<WaterAnalysis />} />
             <Route path="/site-transformation" element={<SiteTransformation />} />
+            
+            <Route path="/officers/environmental" element={<EnvironmentalOfficers />} />
+            <Route path="/officers/water-resources" element={<WaterResourcesOfficers />} />
+            <Route path="/officers/industrial-regulation" element={<IndustrialRegulationOfficers />} />
+            <Route path="/officers/administration" element={<AdministrationOfficers />} />
+            <Route path="/officers/agricultural" element={<AgriculturalOfficers />} />
+            <Route path="/officers/waste" element={<WasteOfficers />} />
+            <Route path="/officers/forest" element={<ForestOfficers />} />
+            <Route path="/officers/soil-conservation" element={<SoilConservationOfficers />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

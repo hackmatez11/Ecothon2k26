@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Map, TrendingUp, MessageSquare, Search,
-  Mic, ShoppingBag, Lightbulb, Shield, TreePine, AlertCircle, LogOut, User
+  Mic, ShoppingBag, Lightbulb, Shield, TreePine, AlertCircle, LogOut, User, Sprout
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 const items = [
   { title: "Dashboard", url: "/citizen-dashboard", icon: LayoutDashboard },
   { title: "Submit Complaint", url: "/citizen-dashboard/complaint", icon: AlertCircle },
+  { title: "Soil Analysis", url: "/citizen-dashboard/soil-analysis", icon: Sprout },
   { title: "Live Map", url: "/citizen-dashboard/map", icon: Map },
   { title: "Pollution Prediction", url: "/citizen-dashboard/prediction", icon: TrendingUp },
   { title: "Report Issue", url: "/citizen-dashboard/report", icon: MessageSquare },
