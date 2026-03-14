@@ -77,7 +77,7 @@ export async function resolveCityCoords(city: string): Promise<[number, number] 
 }
 
 // WAQI API key should ideally be in .env
-const WAQI_TOKEN = 'demo'; // Using 'demo' for reliable fallback or if no token provided
+const WAQI_TOKEN = import.meta.env.VITE_WAQI_TOKEN || 'demo';
 
 export async function fetchAQIData(city: string, lat?: number | null, lng?: number | null): Promise<AQIData> {
   try {
