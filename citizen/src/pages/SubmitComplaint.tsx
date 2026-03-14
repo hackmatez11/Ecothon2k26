@@ -19,7 +19,7 @@ const DEPARTMENTS = [
   { key: 'soil', label: 'Soil Conservation Department', icon: Mountain, color: 'bg-amber-600', textColor: 'text-amber-400', borderColor: 'border-amber-500/40', description: 'Soil erosion, land degradation' },
 ];
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
 
 interface AIResult {
   department: string;
@@ -28,7 +28,7 @@ interface AIResult {
   details: string;
 }
 
-async function analyzeImageWithGemini(base64Image: string, mimeType: string): Promise<AIResult> {
+async function analyzeImageWithGroq(base64Image: string, mimeType: string): Promise<AIResult> {
   const prompt = `You are an environmental complaint AI classifier for a government system.
 Analyze this image and respond with ONLY a valid JSON object (no markdown, no extra text):
 {
@@ -50,33 +50,38 @@ Department selection rules:
 
 Respond ONLY with the JSON object.`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Image } }
-          ]
-        }],
-        generationConfig: { 
-          temperature: 0.1, 
-          maxOutputTokens: 4096,
-          response_mime_type: "application/json"
-        }
-      })
-    }
-  );
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${GROQ_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 512,
+      response_format: { type: 'json_object' },
+    }),
+  });
 
-  if (!response.ok) throw new Error('AI analysis failed');
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Groq API error: ${err}`);
+  }
+
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  console.log('Gemini raw output:', text);
-  
-  // Strip markdown code fences if present
+  const text = data.choices?.[0]?.message?.content ?? '';
+  console.log('Groq raw output:', text);
+
   const cleaned = text.replace(/```json|```/g, '').trim();
   return JSON.parse(cleaned);
 }
@@ -125,7 +130,7 @@ export default function SubmitComplaint() {
     if (!imageBase64) { toast.error('Please upload an image first'); return; }
     setAnalyzing(true);
     try {
-      const result = await analyzeImageWithGemini(imageBase64, imageMime);
+      const result = await analyzeImageWithGroq(imageBase64, imageMime);
       setAiResult(result);
       setDescription(result.description);
       toast.success('Image analyzed successfully!');
@@ -282,7 +287,7 @@ export default function SubmitComplaint() {
             disabled={analyzing}
             className="w-full py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
           >
-            {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Image with AI...</> : <><Leaf className="w-4 h-4" /> Analyze with Gemini AI</>}
+            {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Image with AI...</> : <><Leaf className="w-4 h-4" /> Analyze with Groq AI</>}
           </button>
         )}
       </div>
