@@ -1,9 +1,20 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Inbox, MapPin, Clock, Mail, User, Briefcase, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  Loader2, Inbox, MapPin, Clock, Mail, User, Briefcase,
+  RefreshCw, AlertCircle, ListChecks, Timer, Wrench, Link2,
+  ChevronDown, ChevronUp, CheckCircle2
+} from "lucide-react";
+
+interface ResolutionStep {
+  step: number;
+  title: string;
+  description: string;
+  duration: string;
+  responsible: string;
+}
 
 interface Complaint {
   id: string;
@@ -16,6 +27,11 @@ interface Complaint {
   assigned_officer_name: string | null;
   assignment_reason: string | null;
   assigned_officer_id: string | null;
+  resolution_plan: string | null;
+  resolution_steps: ResolutionStep[] | null;
+  expected_timeline: string | null;
+  plan_generated_at: string | null;
+  plan_generated_by: string | null;
 }
 
 interface OfficerDetail {
@@ -53,6 +69,15 @@ export function ComplaintTracking() {
   const [officerDetails, setOfficerDetails] = useState<Record<string, OfficerDetail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
+
+  const togglePlan = (id: string) => {
+    setExpandedPlans(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const fetchComplaints = async () => {
     if (!user?.email) return;
@@ -61,7 +86,7 @@ export function ComplaintTracking() {
     try {
       const { data, error: err } = await supabase
         .from("complaints")
-        .select("id, description, department, severity, status, location, created_at, assigned_officer_name, assignment_reason, assigned_officer_id")
+        .select("id, description, department, severity, status, location, created_at, assigned_officer_name, assignment_reason, assigned_officer_id, resolution_plan, resolution_steps, expected_timeline, plan_generated_at, plan_generated_by")
         .eq("citizen_email", user.email)
         .order("created_at", { ascending: false });
 
@@ -69,7 +94,6 @@ export function ComplaintTracking() {
       const list = data ?? [];
       setComplaints(list);
 
-      // Fetch officer details for all assigned complaints
       const officerIds = [...new Set(list.map(c => c.assigned_officer_id).filter(Boolean))] as string[];
       if (officerIds.length > 0) {
         const { data: officers } = await supabase
@@ -204,6 +228,72 @@ export function ComplaintTracking() {
                   ) : (
                     <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
                       <p className="text-xs text-muted-foreground">Awaiting officer assignment...</p>
+                    </div>
+                  )}
+
+                  {/* Resolution Plan — shown when government generates it */}
+                  {c.resolution_plan && (
+                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 overflow-hidden">
+                      <button
+                        onClick={() => togglePlan(c.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-violet-500/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ListChecks className="w-4 h-4 text-violet-400" />
+                          <span className="text-sm font-semibold text-foreground">Resolution Plan</span>
+                          {c.expected_timeline && (
+                            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300">
+                              <Timer className="w-3 h-3" />{c.expected_timeline}
+                            </span>
+                          )}
+                        </div>
+                        {expandedPlans.has(c.id)
+                          ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                          : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        }
+                      </button>
+
+                      {expandedPlans.has(c.id) && (
+                        <div className="px-4 pb-4 space-y-4 border-t border-violet-500/10">
+                          {/* Summary */}
+                          <p className="text-sm text-foreground/90 leading-relaxed pt-3">{c.resolution_plan}</p>
+
+                          {/* Steps */}
+                          {c.resolution_steps && c.resolution_steps.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Action Steps</p>
+                              {c.resolution_steps.map((step, i) => (
+                                <div key={i} className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
+                                  <div className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                                    <span className="text-xs font-bold text-violet-400">{step.step}</span>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <p className="text-sm font-medium text-foreground">{step.title}</p>
+                                      <div className="flex gap-2 text-xs text-muted-foreground">
+                                        <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{step.duration}</span>
+                                        <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{step.responsible}</span>
+                                      </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Footer */}
+                          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-violet-500/10">
+                            <span className="flex items-center gap-1 text-violet-400/70">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Published by {c.plan_generated_by ?? "Government Officer"}
+                            </span>
+                            {c.plan_generated_at && (
+                              <span>{formatDate(c.plan_generated_at)}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
