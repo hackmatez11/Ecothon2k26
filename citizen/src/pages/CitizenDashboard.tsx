@@ -47,7 +47,12 @@ export default function CitizenDashboard() {
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             <Routes>
               <Route index element={<DashboardHome />} />
-              <Route path="map" element={<LiveEnvironmentalMap />} />
+              <Route path="map" element={
+                <div className="space-y-8">
+                  <LiveEnvironmentalMap />
+                  <PollutionPrediction />
+                </div>
+              } />
               <Route path="soil-analysis" element={<SoilAnalysis />} />
               <Route path="prediction" element={<PollutionPrediction />} />
               <Route path="report" element={<ReportIssue />} />

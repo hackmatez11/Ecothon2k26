@@ -13,6 +13,8 @@ import tensorflow as tf
 import httpx
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # ── Model paths ────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -151,6 +153,65 @@ def physics_forecast(base_aqi: float, co_trend: float, days: int = 14) -> list[f
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
+OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY", "")
+
+@app.get("/openaq")
+async def openaq_proxy(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    radius: int = Query(25000),
+    limit: int  = Query(20),
+):
+    safe_radius = min(radius, 25000)
+    headers = {"Accept": "application/json"}
+    if OPENAQ_API_KEY:
+        headers["X-API-Key"] = OPENAQ_API_KEY
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        # Step 1: get nearby locations
+        loc_resp = await client.get(
+            "https://api.openaq.org/v3/locations",
+            params={"coordinates": f"{lat},{lng}", "radius": safe_radius, "limit": limit},
+            headers=headers,
+        )
+        if not loc_resp.is_success:
+            return {"results": []}
+        locations = loc_resp.json().get("results", [])
+
+        # Step 2: only fetch latest for locations with recent data (datetimeLast within ~1 year)
+        from datetime import timezone
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        active = []
+        for loc in locations:
+            last = loc.get("datetimeLast", {})
+            utc_str = last.get("utc") if last else None
+            if utc_str:
+                try:
+                    dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+                    if (now - dt).days < 365:
+                        active.append(loc)
+                except Exception:
+                    pass
+
+        if not active:
+            return {"results": []}
+
+        # Step 3: fetch latest readings for each active location in parallel
+        import asyncio
+        async def fetch_latest(loc: dict) -> dict:
+            loc_id = loc["id"]
+            r = await client.get(
+                f"https://api.openaq.org/v3/locations/{loc_id}/latest",
+                headers=headers,
+            )
+            if not r.is_success:
+                return {**loc, "latestReadings": []}
+            return {**loc, "latestReadings": r.json().get("results", [])}
+
+        enriched = await asyncio.gather(*[fetch_latest(loc) for loc in active])
+        return {"results": list(enriched)}
+
 
 @app.get("/health")
 async def health():
