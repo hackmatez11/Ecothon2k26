@@ -14,6 +14,7 @@ import { EnvironmentalTips } from "@/components/dashboard/EnvironmentalTips";
 import { EnvironmentalAlerts } from "@/components/dashboard/EnvironmentalAlerts";
 import { CitizenParticipation } from "@/components/dashboard/CitizenParticipation";
 import { SoilAnalysis } from "@/components/dashboard/SoilAnalysis";
+import { CityAQIAreas } from "@/components/dashboard/CityAQIAreas";
 import SubmitComplaint from "@/pages/SubmitComplaint";
 
 function DashboardHome() {
@@ -21,6 +22,7 @@ function DashboardHome() {
     <div className="space-y-8">
       <WelcomeHeader />
       <LocalPollutionStatus />
+      <CityAQIAreas />
       <EnvironmentalAlerts />
       <PollutionPrediction />
       <GovernmentActions />
