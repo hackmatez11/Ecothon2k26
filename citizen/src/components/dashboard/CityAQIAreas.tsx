@@ -3,6 +3,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, Wind, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
+import { AQIHeatmap } from "./AQIHeatmap";
 
 const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
 const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
@@ -14,6 +15,8 @@ export interface AreaAQI {
   forecast: { day: string; aqi: number }[];
   trend: "up" | "down" | "stable";
   summary: string;
+  lat?: number;
+  lng?: number;
 }
 
 function aqiCategory(aqi: number) {
@@ -112,9 +115,10 @@ ${areasRaw.slice(0, 3000)}`;
 1. Current AQI value (integer, estimate if not exact)
 2. 7-day AQI forecast as array of {day, aqi} objects using day names like Mon, Tue, etc.
 3. A 1-sentence health summary for this area
+4. Approximate latitude and longitude of "${area}" in ${city}, India (use your knowledge if not in results)
 
 Return ONLY valid JSON in this exact format (no markdown, no explanation):
-{"currentAQI": 120, "forecast": [{"day":"Mon","aqi":115},{"day":"Tue","aqi":120},{"day":"Wed","aqi":130},{"day":"Thu","aqi":125},{"day":"Fri","aqi":110},{"day":"Sat","aqi":105},{"day":"Sun","aqi":100}], "summary": "Air quality is moderate with elevated PM2.5 levels."}
+{"currentAQI": 120, "lat": 28.61, "lng": 77.20, "forecast": [{"day":"Mon","aqi":115},{"day":"Tue","aqi":120},{"day":"Wed","aqi":130},{"day":"Thu","aqi":125},{"day":"Fri","aqi":110},{"day":"Sat","aqi":105},{"day":"Sun","aqi":100}], "summary": "Air quality is moderate with elevated PM2.5 levels."}
 
 Search results:
 ${aqiRaw.slice(0, 2500)}`;
@@ -143,6 +147,8 @@ ${aqiRaw.slice(0, 2500)}`;
           forecast,
           trend,
           summary: aqiObj.summary || "Air quality data retrieved from web sources.",
+          lat: typeof aqiObj.lat === "number" ? aqiObj.lat : undefined,
+          lng: typeof aqiObj.lng === "number" ? aqiObj.lng : undefined,
         };
       } catch {
         const aqi = Math.floor(80 + Math.random() * 120);
@@ -191,6 +197,12 @@ export function CityAQIAreas() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [city, setCity] = useState<string>("");
+  const [forecastDay, setForecastDay] = useState(0);
+
+  const cityCenter: [number, number] = [
+    profile?.latitude ?? 28.6139,
+    profile?.longitude ?? 77.209,
+  ];
 
   const load = async (cityName: string) => {
     setLoading(true);
@@ -212,8 +224,10 @@ export function CityAQIAreas() {
     load(c);
   }, [profile, profileLoading]);
 
+  const dayLabels = ["Now", ...(areas[0]?.forecast.map((f) => f.day) ?? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
@@ -246,44 +260,83 @@ export function CityAQIAreas() {
       )}
 
       {!loading && !error && areas.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {areas.map((a) => (
-            <Card key={a.area} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2 pt-4 px-4">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-sm font-semibold leading-tight">{a.area}</CardTitle>
-                  <TrendIcon trend={a.trend} />
+        <>
+          {/* Heatmap section */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wind className="h-4 w-4 text-primary" />
+                  AQI Heatmap — {city}
+                </CardTitle>
+                {/* Day selector */}
+                <div className="flex gap-1 flex-wrap">
+                  {dayLabels.map((label, i) => (
+                    <button
+                      key={label}
+                      onClick={() => setForecastDay(i)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all ${
+                        forecastDay === i
+                          ? "bg-primary text-primary-foreground shadow"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-foreground">{a.currentAQI}</span>
-                  <span className={`mb-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${aqiBadgeColor(a.currentAQI)}`}>
-                    {a.category}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">{a.summary}</p>
-                <div>
-                  <div className="flex items-center gap-1 mb-1">
-                    <Wind className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">7-Day Forecast</span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 pb-4 px-4">
+              <AQIHeatmap
+                areas={areas}
+                cityCenter={cityCenter}
+                cityName={city}
+                forecastDay={forecastDay}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Area cards grid */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {areas.map((a) => (
+              <Card key={a.area} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-sm font-semibold leading-tight">{a.area}</CardTitle>
+                    <TrendIcon trend={a.trend} />
                   </div>
-                  <MiniSparkline forecast={a.forecast} />
-                  <div className="flex justify-between mt-1">
-                    {a.forecast.map((f) => (
-                      <div key={f.day} className="flex flex-col items-center gap-0.5">
-                        <span className="text-[9px] text-muted-foreground">{f.day}</span>
-                        <span className="text-[9px] font-semibold" style={{ color: f.aqi <= 100 ? "#10b981" : f.aqi <= 200 ? "#f59e0b" : "#ef4444" }}>
-                          {f.aqi}
-                        </span>
-                      </div>
-                    ))}
+                </CardHeader>
+                <CardContent className="px-4 pb-4 space-y-3">
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold text-foreground">{a.currentAQI}</span>
+                    <span className={`mb-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${aqiBadgeColor(a.currentAQI)}`}>
+                      {a.category}
+                    </span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{a.summary}</p>
+                  <div>
+                    <div className="flex items-center gap-1 mb-1">
+                      <Wind className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">7-Day Forecast</span>
+                    </div>
+                    <MiniSparkline forecast={a.forecast} />
+                    <div className="flex justify-between mt-1">
+                      {a.forecast.map((f) => (
+                        <div key={f.day} className="flex flex-col items-center gap-0.5">
+                          <span className="text-[9px] text-muted-foreground">{f.day}</span>
+                          <span className="text-[9px] font-semibold" style={{ color: f.aqi <= 100 ? "#10b981" : f.aqi <= 200 ? "#f59e0b" : "#ef4444" }}>
+                            {f.aqi}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
