@@ -53,22 +53,6 @@ export const departments: Department[] = [
         stats: "28 Sources"
       },
       {
-        title: "Eco Products",
-        description: "Manage and promote environmentally friendly products",
-        icon: Leaf,
-        color: "bg-green-500",
-        path: "/eco-products",
-        stats: "156 Products"
-      },
-      {
-        title: "Soil Analysis",
-        description: "Monitor soil health and contamination levels",
-        icon: Mountain,
-        color: "bg-orange-500",
-        path: "/soil-analysis",
-        stats: "45 Sites"
-      },
-      {
         title: "Officer Management",
         description: "Manage department officers and their responsibilities",
         icon: Users,
