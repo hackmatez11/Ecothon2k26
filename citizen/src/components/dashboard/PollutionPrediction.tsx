@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useEffect, useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
-import { fetchAQIData, generateForecast, PredictionData } from "@/lib/environmental";
-import { Loader2, Brain } from "lucide-react";
+import { fetchAQIData, generateForecast, PredictionData, resolveCityCoords } from "@/lib/environmental";
+import { Loader2, Brain, Satellite } from "lucide-react";
 
 const sources = [
   { name: "Traffic", value: 45, color: "hsl(210, 100%, 50%)" },
@@ -16,16 +16,31 @@ export function PollutionPrediction() {
   const { profile, loading: profileLoading } = useProfile();
   const [forecast, setForecast] = useState<PredictionData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forecastCity, setForecastCity] = useState<string>("");
+  const [isSatellite, setIsSatellite] = useState(false);
 
   useEffect(() => {
     async function loadForecast() {
-      if (profile?.city) {
-        const data = await fetchAQIData(profile.city, profile.latitude, profile.longitude);
-        setForecast(generateForecast(data.aqi));
-        setLoading(false);
-      } else if (!profileLoading) {
-        const data = await fetchAQIData("New Delhi", 28.6139, 77.2090);
-        setForecast(generateForecast(data.aqi));
+      const lat  = profile?.latitude  ?? null;
+      const lng  = profile?.longitude ?? null;
+      const city = profile?.city      ?? "New Delhi";
+
+      if (!profileLoading) {
+        const data = await fetchAQIData(city, lat, lng);
+
+        // Resolve coords so we know if satellite data will be used
+        let resolvedLat = lat;
+        let resolvedLng = lng;
+        if (!resolvedLat || !resolvedLng) {
+          const coords = await resolveCityCoords(city);
+          if (coords) [resolvedLat, resolvedLng] = coords;
+        }
+
+        // Pass city name so generateForecast can geocode if lat/lng are missing
+        const fc = await generateForecast(data.aqi, lat, lng, city);
+        setForecast(fc);
+        setForecastCity(data.city || city);
+        setIsSatellite(!!(resolvedLat && resolvedLng));
         setLoading(false);
       }
     }
@@ -47,6 +62,11 @@ export function PollutionPrediction() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-4 w-4 text-primary" /> Air Pollution Forecast (7 Days)
+            {isSatellite && (
+              <span className="ml-auto flex items-center gap-1 text-[10px] font-medium text-sky-500 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                <Satellite className="h-3 w-3" /> Sentinel-5P
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -75,7 +95,7 @@ export function PollutionPrediction() {
             </AreaChart>
           </ResponsiveContainer>
           <div className="mt-2 text-[10px] text-center text-muted-foreground uppercase tracking-wider font-semibold">
-            Predicted AQI levels for {profile?.city || "your region"}
+            Predicted AQI levels for {forecastCity || profile?.city || "your region"}
           </div>
         </CardContent>
       </Card>
