@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { assignOfficerToComplaint } from '@/lib/assignOfficer';
 import { toast } from 'sonner';
 import {
   Upload, Loader2, Leaf, Droplets, Wind, Tractor,
@@ -170,6 +171,19 @@ export default function SubmitComplaint() {
       }).select('id').single();
 
       if (error) throw error;
+
+      // Immediately assign to an officer — no need for government dashboard to be open
+      const dept = aiResult.department?.toLowerCase()?.trim() || 'environment';
+      assignOfficerToComplaint(
+        data.id,
+        dept,
+        description.trim(),
+        aiResult.details
+      ).then(officerName => {
+        if (officerName) {
+          console.log(`Complaint auto-assigned to: ${officerName}`);
+        }
+      });
 
       const id = `CMP-${(data?.id as string).slice(0, 8).toUpperCase()}`;
       setTrackingId(id);

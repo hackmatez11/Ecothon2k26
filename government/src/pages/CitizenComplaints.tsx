@@ -33,7 +33,8 @@ const SEVERITY_CONFIG = {
 
 const STATUS_CONFIG = {
   pending: { label: 'Pending', className: 'bg-gray-500/20 text-gray-300 border-gray-500/30' },
-  in_progress: { label: 'In Progress', className: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  assigned: { label: 'Assigned', className: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  in_progress: { label: 'In Progress', className: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
   resolved: { label: 'Resolved', className: 'bg-green-500/20 text-green-300 border-green-500/30' },
 };
 
@@ -211,6 +212,29 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
                           {formatDate(complaint.created_at)}
                         </span>
                       </div>
+
+                      {/* Assigned Officer */}
+                      {complaint.assigned_officer_name && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
+                          <div className="flex items-start gap-2">
+                            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                              <span className="text-xs font-bold text-primary">
+                                {complaint.assigned_officer_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground">
+                                Assigned to: {complaint.assigned_officer_name}
+                              </p>
+                              {complaint.assignment_reason && (
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                  {complaint.assignment_reason}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>

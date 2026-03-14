@@ -9,7 +9,10 @@ create table complaints (
   department text,
   severity text default 'medium',
   status text default 'pending',
-  location text
+  location text,
+  assigned_officer_id uuid references officers(id),
+  assigned_officer_name text,
+  assignment_reason text
 );
 
 -- Enable row level security

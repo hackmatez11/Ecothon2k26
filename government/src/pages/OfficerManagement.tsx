@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Mail, Phone, Briefcase, Building2, Trash2, Edit, Search } from "lucide-react";
+import { UserPlus, Mail, Phone, Briefcase, Building2, Trash2, Edit, Search, Users, Download, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -35,6 +35,7 @@ const OfficerManagement = ({ department, departmentTitle, icon: Icon, color }: O
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<Officer | null>(null);
+  const [viewingOfficer, setViewingOfficer] = useState<Officer | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -158,6 +159,39 @@ const OfficerManagement = ({ department, departmentTitle, icon: Icon, color }: O
     officer.work_domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Calculate statistics
+  const totalOfficers = officers.length;
+  const uniqueDesignations = new Set(officers.map(o => o.designation)).size;
+  const uniqueDomains = new Set(officers.map(o => o.work_domain)).size;
+  const officersWithPhone = officers.filter(o => o.phone).length;
+
+  // Export to CSV
+  const exportToCSV = () => {
+    const headers = ["Name", "Email", "Designation", "Work Domain", "Phone", "Department"];
+    const rows = filteredOfficers.map(officer => [
+      officer.name,
+      officer.email,
+      officer.designation,
+      officer.work_domain,
+      officer.phone || "N/A",
+      departmentTitle
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${department}_officers_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success("Officers list exported successfully");
+  };
+
   return (
     <div className="space-y-6">
       <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${color} p-6 rounded-xl border border-opacity-20`}>
@@ -253,18 +287,83 @@ const OfficerManagement = ({ department, departmentTitle, icon: Icon, color }: O
         </Dialog>
       </div>
 
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Officers</p>
+                <h3 className="text-2xl font-bold mt-1">{totalOfficers}</h3>
+              </div>
+              <div className={`p-3 rounded-lg ${color}`}>
+                <Users className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Designations</p>
+                <h3 className="text-2xl font-bold mt-1">{uniqueDesignations}</h3>
+              </div>
+              <div className={`p-3 rounded-lg ${color}`}>
+                <Briefcase className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Work Domains</p>
+                <h3 className="text-2xl font-bold mt-1">{uniqueDomains}</h3>
+              </div>
+              <div className={`p-3 rounded-lg ${color}`}>
+                <Building2 className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Contact Info</p>
+                <h3 className="text-2xl font-bold mt-1">{officersWithPhone}/{totalOfficers}</h3>
+              </div>
+              <div className={`p-3 rounded-lg ${color}`}>
+                <Phone className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Department Officers ({filteredOfficers.length})</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search officers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search officers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-2">
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -334,7 +433,16 @@ const OfficerManagement = ({ department, departmentTitle, icon: Icon, color }: O
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setViewingOfficer(officer)}
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleEdit(officer)}
+                            title="Edit Officer"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -343,6 +451,7 @@ const OfficerManagement = ({ department, departmentTitle, icon: Icon, color }: O
                             size="sm"
                             onClick={() => handleDelete(officer.id)}
                             className="text-destructive hover:text-destructive"
+                            title="Remove Officer"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

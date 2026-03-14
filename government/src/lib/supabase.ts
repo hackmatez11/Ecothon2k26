@@ -18,6 +18,9 @@ export type Complaint = {
   ai_analysis: string;
   department: string;
   severity: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in_progress' | 'resolved';
+  status: 'pending' | 'in_progress' | 'resolved' | 'assigned';
   location: string;
+  assigned_officer_id?: string;
+  assigned_officer_name?: string;
+  assignment_reason?: string;
 };
