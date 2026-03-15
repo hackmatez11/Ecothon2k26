@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { sendAssignmentEmail } from "./emailService";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -23,6 +24,7 @@ interface Complaint {
 interface AssignmentResult {
   officerId: string;
   officerName: string;
+  officerEmail: string;
   reason: string;
 }
 
@@ -66,6 +68,20 @@ export async function assignComplaintToOfficer(
       .eq("id", complaint.id);
 
     if (updateError) throw updateError;
+
+    // Send email notification to the assigned officer
+    const officer = officers.find(o => o.id === assignment.officerId);
+    if (officer) {
+      await sendAssignmentEmail({
+        officer_name: officer.name,
+        officer_email: officer.email,
+        complaint_id: complaint.id,
+        description: complaint.description,
+        location: complaint.location || "Not specified",
+        severity: complaint.severity,
+        assignment_reason: assignment.reason,
+      });
+    }
 
     return assignment;
   } catch (error) {
@@ -171,7 +187,10 @@ Respond with ONLY a valid JSON object (no markdown, no extra text):
       };
     }
 
-    return result;
+    return {
+      ...result,
+      officerEmail: selectedOfficer.email
+    };
   } catch (error) {
     console.error("Error calling Groq API:", error);
     return domainMatchFallback(complaint, officers);
@@ -200,6 +219,7 @@ function domainMatchFallback(complaint: Complaint, officers: Officer[]): Assignm
   return {
     officerId: best.id,
     officerName: best.name,
+    officerEmail: best.email,
     reason: `Auto-assigned based on work domain match (${best.work_domain}).`,
   };
 }
