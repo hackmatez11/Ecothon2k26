@@ -1,217 +1,411 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Loader2, Layers } from "lucide-react";
-import { MapContainer, TileLayer, Circle, Popup, useMap } from "react-leaflet";
+import { MapPin, Loader2, Layers, Satellite, Wind, Factory, Trees, Car, Zap, Building2, Home } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.heat";
 import { useProfile } from "@/hooks/useProfile";
-import { fetchAQIData, getAQIColor, AQIData } from "@/lib/environmental";
+import {
+  fetchAQIData, getAQIColor, AQIData,
+  fetchSentinelForecast, resolveCityCoords, ForecastResponse,
+  fetchOpenAQReadings, fetchOverpassPlaces,
+  OpenAQReading, OverpassPlace,
+} from "@/lib/environmental";
 
-const layers = ["Air Pollution", "Water Pollution", "Industrial", "Waste Dumping"];
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface HotspotPoint {
+  lat: number;
+  lng: number;
+  aqi: number;
+  label: string;
+  type: string;
+  category: string;
+  color: string;
+  source: 'openaq' | 'overpass';
+  pm25?: number | null;
+  parameter?: string;
+}
 
-// Helper to center map
-function ChangeView({ center }: { center: [number, number] }) {
+// ── Leaflet heatmap augmentation ───────────────────────────────────────────────
+declare module "leaflet" {
+  function heatLayer(
+    latlngs: Array<[number, number, number]>,
+    options?: {
+      minOpacity?: number; maxZoom?: number; max?: number;
+      radius?: number; blur?: number; gradient?: Record<string, string>;
+    }
+  ): L.Layer & { setLatLngs: (pts: Array<[number, number, number]>) => void };
+}
+
+// ── AQI helpers ────────────────────────────────────────────────────────────────
+const AQI_GRADIENT = {
+  0.0: "#00e400", 0.2: "#ffff00", 0.4: "#ff7e00",
+  0.6: "#ff0000", 0.8: "#8f3f97", 1.0: "#7e0023",
+};
+
+function aqiMeta(aqi: number): { label: string; color: string } {
+  if (aqi <= 50)  return { label: "Good",                           color: "#00e400" };
+  if (aqi <= 100) return { label: "Moderate",                       color: "#ffff00" };
+  if (aqi <= 150) return { label: "Unhealthy for Sensitive Groups", color: "#ff7e00" };
+  if (aqi <= 200) return { label: "Unhealthy",                      color: "#ff0000" };
+  if (aqi <= 300) return { label: "Very Unhealthy",                 color: "#8f3f97" };
+  return           { label: "Hazardous",                            color: "#7e0023" };
+}
+
+// ── Type icon map ──────────────────────────────────────────────────────────────
+const TYPE_LABELS: Record<string, string> = {
+  industrial:  "Industrial",
+  traffic:     "Traffic",
+  park:        "Park / Green",
+  residential: "Residential",
+  commercial:  "Commercial",
+  power:       "Power Plant",
+  openaq:      "Air Monitor",
+};
+
+// ── Custom marker icon ─────────────────────────────────────────────────────────
+function makeIcon(color: string, source: 'openaq' | 'overpass') {
+  // OpenAQ stations get a square pin; Overpass places get a circle
+  const shape = source === 'openaq'
+    ? `border-radius:3px;width:13px;height:13px;`
+    : `border-radius:50%;width:13px;height:13px;`;
+  return L.divIcon({
+    className: "",
+    html: `<div style="${shape}background:${color};border:2px solid white;box-shadow:0 0 6px ${color}88;"></div>`,
+    iconSize:   [13, 13],
+    iconAnchor: [6, 6],
+  });
+}
+
+// ── Heatmap layer ──────────────────────────────────────────────────────────────
+function HeatLayer({ points }: { points: Array<[number, number, number]> }) {
   const map = useMap();
-  map.setView(center, 12);
+  const ref = useRef<ReturnType<typeof L.heatLayer> | null>(null);
+
+  useEffect(() => {
+    ref.current = L.heatLayer(points, {
+      radius: 45, blur: 35, maxZoom: 13, max: 300, minOpacity: 0.35,
+      gradient: AQI_GRADIENT,
+    });
+    ref.current.addTo(map);
+    return () => { if (ref.current) map.removeLayer(ref.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
+
+  useEffect(() => {
+    if (ref.current && points.length) {
+      ref.current.setLatLngs(points);
+      (ref.current as any)._update?.();
+    }
+  }, [points]);
+
   return null;
 }
 
-export function LiveEnvironmentalMap() {
-  const [activeLayer, setActiveLayer] = useState("Air Pollution");
-  const { profile, loading: profileLoading } = useProfile();
-  const [aqiData, setAqiData] = useState<AQIData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+function ChangeView({ center }: { center: [number, number] }) {
+  const map = useMap();
+  useEffect(() => { map.setView(center, 12); }, [center, map]);
+  return null;
+}
 
-  const center: [number, number] = profile?.latitude && profile?.longitude 
-    ? [profile.latitude, profile.longitude] 
-    : [28.6139, 77.2090]; // Default New Delhi
+const LAYERS = ["Heatmap", "Hotspots"];
+
+// ── Main component ─────────────────────────────────────────────────────────────
+export function LiveEnvironmentalMap() {
+  const { profile, loading: profileLoading } = useProfile();
+  const [activeLayer, setActiveLayer] = useState("Heatmap");
+  const [aqiData,     setAqiData]     = useState<AQIData | null>(null);
+  const [forecast,    setForecast]    = useState<ForecastResponse | null>(null);
+  const [hotspots,    setHotspots]    = useState<HotspotPoint[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [isSatellite, setIsSatellite] = useState(false);
+  const [dataSource,  setDataSource]  = useState<string>("loading…");
+
+  const center: [number, number] =
+    profile?.latitude && profile?.longitude
+      ? [profile.latitude, profile.longitude]
+      : [28.6139, 77.209];
 
   useEffect(() => {
-    async function loadData() {
+    async function load() {
       const city = profile?.city || "New Delhi";
-      const data = await fetchAQIData(city);
-      setAqiData(data);
+      let lat = profile?.latitude  ?? null;
+      let lng = profile?.longitude ?? null;
+
+      if (!lat || !lng) {
+        const coords = await resolveCityCoords(city);
+        if (coords) [lat, lng] = coords;
+      }
+
+      // 1. Current AQI (WAQI fallback)
+      const aqi = await fetchAQIData(city, lat, lng);
+      setAqiData(aqi);
+
+      if (!lat || !lng) { setLoading(false); return; }
+
+      // 2. Sentinel-5P forecast for base AQI
+      let baseAqi = aqi.aqi;
+      try {
+        const fc = await fetchSentinelForecast(lat, lng);
+        setForecast(fc);
+        setIsSatellite(true);
+        baseAqi = fc.current_aqi;
+      } catch { /* use WAQI aqi as base */ }
+
+      // 3. Fetch real places + real readings in parallel
+      const [openaqReadings, overpassPlaces] = await Promise.all([
+        fetchOpenAQReadings(lat, lng, 25),
+        fetchOverpassPlaces(lat, lng, 8000),
+      ]);
+
+      const points: HotspotPoint[] = [];
+
+      // OpenAQ — real measured AQI at real station coordinates
+      for (const r of openaqReadings) {
+        const meta = aqiMeta(r.aqi);
+        points.push({
+          lat:       r.lat,
+          lng:       r.lng,
+          aqi:       r.aqi,
+          label:     r.locationName,
+          type:      'openaq',
+          source:    'openaq',
+          pm25:      r.pm25,
+          parameter: r.parameter,
+          ...meta,
+        });
+      }
+
+      // Overpass — real OSM places with AQI derived from Sentinel base × land-use multiplier
+      for (const p of overpassPlaces) {
+        const aqi = Math.max(0, Math.round(baseAqi * p.aqiMultiplier));
+        const meta = aqiMeta(aqi);
+        points.push({
+          lat:    p.lat,
+          lng:    p.lng,
+          aqi,
+          label:  p.name,
+          type:   p.type,
+          source: 'overpass',
+          ...meta,
+        });
+      }
+
+      // Fallback: if both APIs returned nothing, use offset grid
+      if (points.length === 0) {
+        const offsets: Array<[number, number, number, string, OverpassPlace['type']]> = [
+          [ 0.00,  0.00, baseAqi,        "City Center",    "residential"],
+          [ 0.03,  0.04, baseAqi * 1.40, "Industrial Zone","industrial"],
+          [-0.02,  0.05, baseAqi * 1.25, "Traffic Hub",    "traffic"],
+          [ 0.05, -0.03, baseAqi * 0.50, "City Park",      "park"],
+          [-0.04, -0.04, baseAqi * 0.80, "Residential",    "residential"],
+          [ 0.04,  0.06, baseAqi * 1.55, "Power Plant",    "power"],
+        ];
+        for (const [dlat, dlng, aq, label, type] of offsets) {
+          const clamped = Math.max(0, Math.round(aq));
+          const meta    = aqiMeta(clamped);
+          points.push({ lat: lat! + dlat, lng: lng! + dlng, aqi: clamped, label, type, source: 'overpass', ...meta });
+        }
+        setDataSource("estimated");
+      } else {
+        const src = [
+          openaqReadings.length  > 0 ? `${openaqReadings.length} OpenAQ stations` : '',
+          overpassPlaces.length  > 0 ? `${overpassPlaces.length} OSM places`      : '',
+        ].filter(Boolean).join(' + ');
+        setDataSource(src);
+      }
+
+      setHotspots(points);
       setLoading(false);
     }
-    loadData();
-  }, [profile]);
+
+    if (!profileLoading) load();
+  }, [profile, profileLoading]);
+
+  const heatPoints: Array<[number, number, number]> = hotspots.map(h => [h.lat, h.lng, h.aqi]);
+  const todayForecast = forecast?.forecast[0];
 
   if (profileLoading || loading) {
     return (
-      <Card className="h-[600px] flex items-center justify-center">
-        <div className="text-center">
+      <Card className="h-[500px] flex items-center justify-center">
+        <div className="text-center space-y-2">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-          <p className="mt-2 text-sm text-muted-foreground">Initializing Live Map...</p>
+          <p className="text-sm text-muted-foreground">Fetching satellite + ground data…</p>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className="overflow-hidden border-none shadow-premium">
-      <CardHeader className="bg-muted/50 border-b">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-primary font-bold">
-            <MapPin className="h-5 w-5" /> Live Environmental Map
+    <Card className="overflow-hidden">
+      <CardHeader className="bg-muted/50 border-b py-3 px-4">
+        <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-primary font-bold text-sm">
+            <MapPin className="h-4 w-4" /> Live Environmental Map
           </div>
-          <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-widest">
-            {profile?.city || "New Delhi"} Center
-          </Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isSatellite && (
+              <span className="flex items-center gap-1 text-[10px] font-medium text-sky-500 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                <Satellite className="h-3 w-3" /> Sentinel-5P
+              </span>
+            )}
+            {dataSource !== "loading…" && dataSource !== "estimated" && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {dataSource}
+              </span>
+            )}
+            <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-widest">
+              {profile?.city || "New Delhi"}
+            </Badge>
+          </div>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="p-0">
-        <div className="p-4 bg-background border-b flex flex-col md:flex-row gap-4 items-center">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              placeholder="Search specific location..." 
-              className="pl-10 h-10 bg-muted/30 border-none focus-visible:ring-primary/20" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 w-full md:w-auto">
-            {layers.map((layer) => (
-              <button
-                key={layer}
-                onClick={() => setActiveLayer(layer)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                  activeLayer === layer
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {activeLayer === layer && <Layers className="h-3 w-3" />}
-                {layer}
-              </button>
-            ))}
-          </div>
+        {/* Layer switcher */}
+        <div className="px-4 py-2 bg-background border-b flex gap-2 overflow-x-auto">
+          {LAYERS.map(layer => (
+            <button
+              key={layer}
+              onClick={() => setActiveLayer(layer)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                activeLayer === layer
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {activeLayer === layer && <Layers className="h-3 w-3" />}
+              {layer}
+            </button>
+          ))}
         </div>
 
-        <div className="relative h-[400px] md:h-[500px] w-full z-0">
-          <MapContainer 
-            center={center} 
-            zoom={12} 
+        {/* Map */}
+        <div className="relative h-[420px] w-full">
+          <MapContainer
+            center={center} zoom={12}
             style={{ height: "100%", width: "100%" }}
             scrollWheelZoom={false}
           >
             <ChangeView center={center} />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {/* Real AQI marker for the city */}
-            {aqiData && (
+
+            {/* Heatmap */}
+            {activeLayer === "Heatmap" && heatPoints.length > 0 && (
+              <HeatLayer points={heatPoints} />
+            )}
+
+            {/* Air Quality circle */}
+            {activeLayer === "Air Quality" && aqiData && (
               <Circle
                 center={center}
-                pathOptions={{ 
-                  fillColor: getAQIColor(aqiData.aqi), 
-                  color: getAQIColor(aqiData.aqi),
-                  fillOpacity: 0.4,
-                  weight: 2
+                pathOptions={{
+                  fillColor: getAQIColor(aqiData.aqi),
+                  color:     getAQIColor(aqiData.aqi),
+                  fillOpacity: 0.35, weight: 2,
                 }}
-                radius={2000}
+                radius={2500}
               >
                 <Popup>
-                  <div className="p-2 min-w-[150px]">
-                    <h3 className="font-bold text-lg">{aqiData.city}</h3>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Main Station AQI:</span>
-                      <span className="font-bold text-primary">{aqiData.aqi}</span>
-                    </div>
-                    <div className={`mt-2 text-center p-1 rounded text-xs font-bold text-white`} style={{ backgroundColor: getAQIColor(aqiData.aqi) }}>
+                  <div className="p-2 min-w-[160px]">
+                    <p className="font-bold">{aqiData.city}</p>
+                    <p className="text-xs mt-1">AQI: <strong>{aqiData.aqi}</strong></p>
+                    <div className="mt-1 text-[10px] rounded px-2 py-0.5 text-white text-center font-bold"
+                      style={{ background: getAQIColor(aqiData.aqi) }}>
                       {aqiData.category}
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-1 text-[10px]">
-                      <div>PM2.5: {aqiData.pm25}</div>
-                      <div>PM10: {aqiData.pm10}</div>
-                      <div>NO₂: {aqiData.no2}</div>
-                      <div>CO: {aqiData.co}</div>
+                      <span>PM2.5: {aqiData.pm25}</span>
+                      <span>PM10: {aqiData.pm10}</span>
+                      <span>NO₂: {aqiData.no2}</span>
+                      <span>CO: {aqiData.co}</span>
                     </div>
                   </div>
                 </Popup>
               </Circle>
             )}
 
-            {/* Simulated nearby sensors */}
-            <Circle 
-              center={[center[0] + 0.02, center[1] + 0.02]} 
-              pathOptions={{ fillColor: '#ef4444', color: '#ef4444', fillOpacity: 0.3 }} 
-              radius={800} 
-            />
-             <Circle 
-              center={[center[0] - 0.015, center[1] + 0.03]} 
-              pathOptions={{ fillColor: '#f59e0b', color: '#f59e0b', fillOpacity: 0.3 }} 
-              radius={600} 
-            />
-            <Circle 
-              center={[center[0] + 0.01, center[1] - 0.02]} 
-              pathOptions={{ fillColor: '#10b981', color: '#10b981', fillOpacity: 0.3 }} 
-              radius={1000} 
-            />
+            {/* Hotspot / heatmap markers */}
+            {(activeLayer === "Hotspots" || activeLayer === "Heatmap") &&
+              hotspots.map((h, i) => (
+                <Marker
+                  key={`${h.source}-${i}`}
+                  position={[h.lat, h.lng]}
+                  icon={makeIcon(h.color, h.source)}
+                >
+                  <Popup>
+                    <div style={{ minWidth: 150 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <strong style={{ fontSize: 12 }}>{h.label}</strong>
+                        <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.6 }}>
+                          {h.source === 'openaq' ? '📡 OpenAQ' : '🗺 OSM'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11 }}>{TYPE_LABELS[h.type] ?? h.type}</div>
+                      <div style={{ fontSize: 11, marginTop: 2 }}>
+                        AQI: <strong>{h.aqi}</strong>
+                        {h.pm25 != null && <span style={{ opacity: 0.7, marginLeft: 6 }}>PM2.5: {h.pm25.toFixed(1)}</span>}
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 10, background: h.color, color: '#fff', borderRadius: 4, padding: '2px 6px', textAlign: 'center', fontWeight: 700 }}>
+                        {h.category}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))
+            }
           </MapContainer>
 
-          {/* Map Overlay Controls */}
-          <div className="absolute top-4 right-4 z-[1000] space-y-2">
-            <div className="bg-background/90 backdrop-blur-md p-3 rounded-xl border shadow-xl max-w-[200px]">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">AQI Legend</p>
-              <div className="space-y-1.5">
-                {[
-                  { label: "Good", color: "bg-status-safe", range: "0-50" },
-                  { label: "Moderate", color: "bg-status-moderate", range: "51-100" },
-                  { label: "Unhealthy", color: "bg-orange-500", range: "101-200" },
-                  { label: "Hazardous", color: "bg-status-danger", range: "201+" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
-                      <span className="text-xs font-medium">{item.label}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{item.range}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3 bg-muted/10">
-          <div className="space-y-4 lg:col-span-2">
-            <h3 className="text-sm font-bold flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-ping" /> Pollution hotspots near {profile?.city || "New Delhi"}
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-               {[
-                { name: "Industrial Zone A", type: "Industrial", level: "Critical", color: "destructive" as const, val: "242" },
-                { name: "Central Traffic Hub", type: "Vehicle", level: "High", color: "secondary" as const, val: "185" },
-                { name: "Riverside North", type: "Water", level: "Moderate", color: "default" as const, val: "72" },
-                { name: "Residential Park", type: "Air", level: "Good", color: "outline" as const, val: "34" },
-              ].map((h) => (
-                <div key={h.name} className="flex items-center justify-between rounded-xl bg-background border p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                  <div>
-                    <p className="text-sm font-bold group-hover:text-primary transition-colors">{h.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{h.type} Pollution</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold mb-1">AQI {h.val}</p>
-                    <Badge variant={h.color} className="text-[9px] uppercase">{h.level}</Badge>
-                  </div>
+          {/* AQI Legend */}
+          <div className="absolute bottom-4 left-4 z-[1000] bg-background/90 backdrop-blur-sm rounded-xl border p-3 shadow-lg">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">AQI Scale</p>
+            <div className="space-y-1">
+              {[
+                { label: "Good",             color: "#00e400", range: "0–50"    },
+                { label: "Moderate",         color: "#ffff00", range: "51–100"  },
+                { label: "Unhealthy*",       color: "#ff7e00", range: "101–150" },
+                { label: "Unhealthy",        color: "#ff0000", range: "151–200" },
+                { label: "Very Unhealthy",   color: "#8f3f97", range: "201–300" },
+                { label: "Hazardous",        color: "#7e0023", range: "300+"    },
+              ].map(l => (
+                <div key={l.label} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: l.color }} />
+                  <span className="text-[10px] text-muted-foreground">{l.label}</span>
+                  <span className="text-[10px] text-muted-foreground/60 ml-auto">{l.range}</span>
                 </div>
               ))}
             </div>
+            {/* Marker legend */}
+            <div className="mt-2 pt-2 border-t space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-sm flex-shrink-0 bg-sky-400" />
+                <span className="text-[10px] text-muted-foreground">📡 OpenAQ station</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-slate-400" />
+                <span className="text-[10px] text-muted-foreground">🗺 OSM place</span>
+              </div>
+            </div>
           </div>
-          <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10">
-            <h4 className="font-bold text-sm text-primary mb-2">Did you know?</h4>
-            <p className="text-xs leading-relaxed text-muted-foreground italic">
-              "Fine particulate matter (PM2.5) can penetrate deep into the lungs and enter the bloodstream. Using HEPA filters on hazardous days can reduce indoor exposure by up to 50%."
-            </p>
-            <button className="mt-4 w-full py-2 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:shadow-lg transition-all">
-              View Health Recommendations
-            </button>
-          </div>
+
+          {/* Today's forecast pill */}
+          {todayForecast && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-background/90 backdrop-blur-sm rounded-full border px-3 py-1 shadow flex items-center gap-2">
+              <Wind className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs font-semibold">Today:</span>
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded-full text-white"
+                style={{ background: todayForecast.color }}>
+                AQI {todayForecast.aqi} — {todayForecast.category}
+              </span>
+            </div>
+          )}
         </div>
+
       </CardContent>
     </Card>
   );
