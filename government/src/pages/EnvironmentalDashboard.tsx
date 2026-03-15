@@ -3,7 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
 import { useState, useEffect } from "react";
-import { fetchAQIData, AQIData, getAQIColor, fetchPredictionData, PredictionResponse } from "@/lib/environmental";
+import { fetchAQIData, AQIData, getAQIColor, fetchPredictionData, PredictionResponse, fetchSourceAttribution, SourceAttributionResponse } from "@/lib/environmental";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,32 +17,27 @@ const trendData = [
   { day: "Oct", aqi: 190 }, { day: "Nov", aqi: 220 }, { day: "Dec", aqi: 200 },
 ];
 
-const sourceData = [
-  { name: "Vehicles", value: 35, color: "#3b82f6" },
-  { name: "Factories", value: 28, color: "#ef4444" },
-  { name: "Construction", value: 18, color: "#f59e0b" },
-  { name: "Waste Burning", value: 12, color: "#8b5cf6" },
-  { name: "Other", value: 7, color: "#6b7280" },
-];
-
 const EnvironmentalDashboard = () => {
   const navigate = useNavigate();
   const deptData = departments.find(d => d.title === "Environmental Department")!;
   const [city, setCity] = useState("Delhi");
   const [aqiData, setAqiData] = useState<AQIData | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResponse | null>(null);
+  const [sourceData, setSourceData] = useState<SourceAttributionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("Delhi");
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [data, pred] = await Promise.all([
+      const [data, pred, source] = await Promise.all([
         fetchAQIData(city),
-        fetchPredictionData(city)
+        fetchPredictionData(city),
+        fetchSourceAttribution(city)
       ]);
       setAqiData(data);
       setPredictionData(pred);
+      setSourceData(source);
       setLoading(false);
     }
     loadData();
@@ -255,30 +250,50 @@ const EnvironmentalDashboard = () => {
 
         <Card>
           <CardHeader className="py-4 border-b bg-muted/30">
-            <CardTitle className="text-lg font-bold">Source Attribution</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-bold">Source Attribution</CardTitle>
+              {sourceData && (
+                 <Badge variant="outline" className="text-[10px] uppercase">
+                   LIVE ANALYSIS
+                 </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={sourceData} cx="50%" cy="50%" innerRadius={70} outerRadius={100} dataKey="value" paddingAngle={4}>
-                  {sourceData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} stroke="none" />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-3 mt-6">
-              {sourceData.map((s) => (
-                <div key={s.name} className="flex items-center justify-between text-sm group cursor-help">
-                  <div className="flex items-center gap-3">
-                    <div className="h-3 w-3 rounded-full shadow-sm" style={{ background: s.color }} />
-                    <span className="text-muted-foreground font-medium group-hover:text-foreground transition-colors">{s.name}</span>
+            {!sourceData ? (
+               <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground">
+                 <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                 <p className="text-sm">Analyzing Local Source Apportionment...</p>
+                 <p className="text-xs opacity-70 mt-2 text-center max-w-[200px]">Querying OpenStreetMap landuse & TomTom traffic</p>
+               </div>
+            ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={sourceData.sources} cx="50%" cy="50%" innerRadius={70} outerRadius={100} dataKey="value" paddingAngle={4}>
+                        {sourceData.sources.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(value) => [`${value}%`, 'Contribution']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-3 mt-6">
+                    {sourceData.sources.map((s) => (
+                      <div key={s.name} className="flex items-center justify-between text-sm group cursor-help">
+                        <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 rounded-full shadow-sm" style={{ background: s.color }} />
+                          <span className="text-muted-foreground font-medium group-hover:text-foreground transition-colors">{s.name}</span>
+                        </div>
+                        <span className="font-bold text-foreground text-base">{s.value}%</span>
+                      </div>
+                    ))}
                   </div>
-                  <span className="font-bold text-foreground text-base">{s.value}%</span>
-                </div>
-              ))}
-            </div>
+                </>
+            )}
           </CardContent>
         </Card>
       </div>

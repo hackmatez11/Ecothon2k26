@@ -81,6 +81,43 @@ const CITY_COORDS: Record<string, [number, number]> = {
   'coimbatore': [11.0168, 76.9558],
 };
 
+export interface SourceData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface SourceAttributionResponse {
+  lat: number;
+  lng: number;
+  sources: SourceData[];
+  metrics: {
+    traffic_congestion_multiplier: number;
+    osm_industrial_nodes: number;
+    osm_construction_nodes: number;
+  };
+  generated_at: string;
+}
+
+export async function fetchSourceAttribution(city: string): Promise<SourceAttributionResponse | null> {
+  try {
+    const coords = await resolveCityCoords(city);
+    if (!coords) return null;
+    
+    const [lat, lng] = coords;
+    const url = `${SENTINEL_API_URL}/source-attribution?lat=${lat}&lng=${lng}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Source attribution fetch failed:', err);
+  }
+  return null;
+}
+
+
+
 /**
  * Resolve coordinates for a city name.
  */
