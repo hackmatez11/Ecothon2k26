@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Loader2, Layers, Satellite, Wind, Factory, Trees, Car, Zap, Building2, Home } from "lucide-react";
+import { MapPin, Loader2, Layers, Satellite, Wind } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -11,7 +11,7 @@ import {
   fetchAQIData, getAQIColor, AQIData,
   fetchSentinelForecast, resolveCityCoords, ForecastResponse,
   fetchOpenAQReadings, fetchOverpassPlaces,
-  OpenAQReading, OverpassPlace,
+  OverpassPlace,
 } from "@/lib/environmental";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -45,13 +45,13 @@ const AQI_GRADIENT = {
   0.6: "#ff0000", 0.8: "#8f3f97", 1.0: "#7e0023",
 };
 
-function aqiMeta(aqi: number): { label: string; color: string } {
-  if (aqi <= 50)  return { label: "Good",                           color: "#00e400" };
-  if (aqi <= 100) return { label: "Moderate",                       color: "#ffff00" };
-  if (aqi <= 150) return { label: "Unhealthy for Sensitive Groups", color: "#ff7e00" };
-  if (aqi <= 200) return { label: "Unhealthy",                      color: "#ff0000" };
-  if (aqi <= 300) return { label: "Very Unhealthy",                 color: "#8f3f97" };
-  return           { label: "Hazardous",                            color: "#7e0023" };
+function aqiMeta(aqi: number): { label: string; color: string; category: string } {
+  if (aqi <= 50)  return { label: "Good",                           color: "#00e400", category: "Good" };
+  if (aqi <= 100) return { label: "Moderate",                       color: "#ffff00", category: "Moderate" };
+  if (aqi <= 150) return { label: "Unhealthy for Sensitive Groups", color: "#ff7e00", category: "Unhealthy for Sensitive Groups" };
+  if (aqi <= 200) return { label: "Unhealthy",                      color: "#ff0000", category: "Unhealthy" };
+  if (aqi <= 300) return { label: "Very Unhealthy",                 color: "#8f3f97", category: "Very Unhealthy" };
+  return           { label: "Hazardous",                            color: "#7e0023", category: "Hazardous" };
 }
 
 // ── Type icon map ──────────────────────────────────────────────────────────────
@@ -67,7 +67,6 @@ const TYPE_LABELS: Record<string, string> = {
 
 // ── Custom marker icon ─────────────────────────────────────────────────────────
 function makeIcon(color: string, source: 'openaq' | 'overpass') {
-  // OpenAQ stations get a square pin; Overpass places get a circle
   const shape = source === 'openaq'
     ? `border-radius:3px;width:13px;height:13px;`
     : `border-radius:50%;width:13px;height:13px;`;
@@ -139,13 +138,11 @@ export function LiveEnvironmentalMap() {
         if (coords) [lat, lng] = coords;
       }
 
-      // 1. Current AQI (WAQI fallback)
       const aqi = await fetchAQIData(city, lat, lng);
       setAqiData(aqi);
 
       if (!lat || !lng) { setLoading(false); return; }
 
-      // 2. Sentinel-5P forecast for base AQI
       let baseAqi = aqi.aqi;
       try {
         const fc = await fetchSentinelForecast(lat, lng);
@@ -154,7 +151,6 @@ export function LiveEnvironmentalMap() {
         baseAqi = fc.current_aqi;
       } catch { /* use WAQI aqi as base */ }
 
-      // 3. Fetch real places + real readings in parallel
       const [openaqReadings, overpassPlaces] = await Promise.all([
         fetchOpenAQReadings(lat, lng, 25),
         fetchOverpassPlaces(lat, lng, 8000),
@@ -162,7 +158,6 @@ export function LiveEnvironmentalMap() {
 
       const points: HotspotPoint[] = [];
 
-      // OpenAQ — real measured AQI at real station coordinates
       for (const r of openaqReadings) {
         const meta = aqiMeta(r.aqi);
         points.push({
@@ -174,26 +169,26 @@ export function LiveEnvironmentalMap() {
           source:    'openaq',
           pm25:      r.pm25,
           parameter: r.parameter,
-          ...meta,
+          category:  meta.category,
+          color:     meta.color,
         });
       }
 
-      // Overpass — real OSM places with AQI derived from Sentinel base × land-use multiplier
       for (const p of overpassPlaces) {
-        const aqi = Math.max(0, Math.round(baseAqi * p.aqiMultiplier));
-        const meta = aqiMeta(aqi);
+        const aqiVal = Math.max(0, Math.round(baseAqi * p.aqiMultiplier));
+        const meta = aqiMeta(aqiVal);
         points.push({
-          lat:    p.lat,
-          lng:    p.lng,
-          aqi,
-          label:  p.name,
-          type:   p.type,
-          source: 'overpass',
-          ...meta,
+          lat:      p.lat,
+          lng:      p.lng,
+          aqi:      aqiVal,
+          label:    p.name,
+          type:     p.type,
+          source:   'overpass',
+          category: meta.category,
+          color:    meta.color,
         });
       }
 
-      // Fallback: if both APIs returned nothing, use offset grid
       if (points.length === 0) {
         const offsets: Array<[number, number, number, string, OverpassPlace['type']]> = [
           [ 0.00,  0.00, baseAqi,        "City Center",    "residential"],
@@ -206,13 +201,13 @@ export function LiveEnvironmentalMap() {
         for (const [dlat, dlng, aq, label, type] of offsets) {
           const clamped = Math.max(0, Math.round(aq));
           const meta    = aqiMeta(clamped);
-          points.push({ lat: lat! + dlat, lng: lng! + dlng, aqi: clamped, label, type, source: 'overpass', ...meta });
+          points.push({ lat: lat! + dlat, lng: lng! + dlng, aqi: clamped, label, type, source: 'overpass', category: meta.category, color: meta.color });
         }
         setDataSource("estimated");
       } else {
         const src = [
-          openaqReadings.length  > 0 ? `${openaqReadings.length} OpenAQ stations` : '',
-          overpassPlaces.length  > 0 ? `${overpassPlaces.length} OSM places`      : '',
+          openaqReadings.length > 0 ? `${openaqReadings.length} OpenAQ stations` : '',
+          overpassPlaces.length > 0 ? `${overpassPlaces.length} OSM places`      : '',
         ].filter(Boolean).join(' + ');
         setDataSource(src);
       }
@@ -295,12 +290,10 @@ export function LiveEnvironmentalMap() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Heatmap */}
             {activeLayer === "Heatmap" && heatPoints.length > 0 && (
               <HeatLayer points={heatPoints} />
             )}
 
-            {/* Air Quality circle */}
             {activeLayer === "Air Quality" && aqiData && (
               <Circle
                 center={center}
@@ -330,7 +323,6 @@ export function LiveEnvironmentalMap() {
               </Circle>
             )}
 
-            {/* Hotspot / heatmap markers */}
             {(activeLayer === "Hotspots" || activeLayer === "Heatmap") &&
               hotspots.map((h, i) => (
                 <Marker
@@ -366,12 +358,12 @@ export function LiveEnvironmentalMap() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">AQI Scale</p>
             <div className="space-y-1">
               {[
-                { label: "Good",             color: "#00e400", range: "0–50"    },
-                { label: "Moderate",         color: "#ffff00", range: "51–100"  },
-                { label: "Unhealthy*",       color: "#ff7e00", range: "101–150" },
-                { label: "Unhealthy",        color: "#ff0000", range: "151–200" },
-                { label: "Very Unhealthy",   color: "#8f3f97", range: "201–300" },
-                { label: "Hazardous",        color: "#7e0023", range: "300+"    },
+                { label: "Good",           color: "#00e400", range: "0–50"    },
+                { label: "Moderate",       color: "#ffff00", range: "51–100"  },
+                { label: "Unhealthy*",     color: "#ff7e00", range: "101–150" },
+                { label: "Unhealthy",      color: "#ff0000", range: "151–200" },
+                { label: "Very Unhealthy", color: "#8f3f97", range: "201–300" },
+                { label: "Hazardous",      color: "#7e0023", range: "300+"    },
               ].map(l => (
                 <div key={l.label} className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: l.color }} />
@@ -380,7 +372,6 @@ export function LiveEnvironmentalMap() {
                 </div>
               ))}
             </div>
-            {/* Marker legend */}
             <div className="mt-2 pt-2 border-t space-y-1">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-sm flex-shrink-0 bg-sky-400" />
@@ -405,7 +396,6 @@ export function LiveEnvironmentalMap() {
             </div>
           )}
         </div>
-
       </CardContent>
     </Card>
   );
