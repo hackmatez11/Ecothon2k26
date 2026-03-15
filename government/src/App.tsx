@@ -25,6 +25,8 @@ import Communication from "./pages/Communication";
 import Budget from "./pages/Budget";
 import WaterQuality from "./pages/WaterQuality";
 import OilSpill from "./pages/OilSpill";
+import OilSpillDetection from "./pages/OilSpillDetection";
+import IndustrialDetection from "./pages/IndustrialDetection";
 import IndustrialPollution from "./pages/IndustrialPollution";
 import Complaints from "./pages/Complaints";
 import VoiceComplaint from "./pages/VoiceComplaint";
@@ -74,6 +76,8 @@ const App = () => (
             <Route path="/budget" element={<Budget />} />
             <Route path="/water-quality" element={<WaterQuality />} />
             <Route path="/oil-spill" element={<OilSpill />} />
+            <Route path="/oil-spill-detection" element={<OilSpillDetection />} />
+            <Route path="/industrial-detection" element={<IndustrialDetection />} />
             <Route path="/industrial-pollution" element={<IndustrialPollution />} />
             <Route path="/complaints" element={<Complaints />} />
             <Route path="/voice-complaint" element={<VoiceComplaint />} />

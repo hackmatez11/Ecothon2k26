@@ -1,9 +1,8 @@
 import { 
   Leaf, Droplets, Factory, ClipboardList, 
   Brain, PieChart, Mountain, Ship, 
-  MessageCircle, Mic, MessageSquare, Wallet, MapPin, Users, Trees, Trash2
+  MessageCircle, Mic, MessageSquare, Wallet, MapPin, Users, Trees, Trash2, ScanSearch
 } from "lucide-react";
-
 export interface Feature {
   title: string;
   description: string;
@@ -51,6 +50,22 @@ export const departments: Department[] = [
         color: "bg-purple-500",
         path: "/pollution-sources",
         stats: "28 Sources"
+      },
+      {
+        title: "Industrial Detection",
+        description: "Detect kilns and industrial emitters from satellite imagery using AI",
+        icon: ScanSearch,
+        color: "bg-red-500",
+        path: "/industrial-detection",
+        stats: "AI Powered"
+      },
+      {
+        title: "Oil Spill Detection",
+        description: "Detect oil spills using Sentinel-1 SAR satellite imagery",
+        icon: Ship,
+        color: "bg-orange-500",
+        path: "/oil-spill-detection",
+        stats: "SAR · CDSE"
       },
       {
         title: "Officer Management",

@@ -391,7 +391,7 @@ function evaluatePixel(s) { return [s.VV]; }
     return arr, transform_info
 
 
-def detect_oil_spills(arr: np.ndarray, transform_info: dict, bbox: list[float]) -> list[dict]:
+def detect_oil_spills(arr: np.ndarray, transform_info: dict, bbox: list[float]) -> tuple[list[dict], str | None]:
     """
     SAR oil spill detection on a float32 VV linear-power array from Sentinel-1.
 
@@ -416,13 +416,13 @@ def detect_oil_spills(arr: np.ndarray, transform_info: dict, bbox: list[float]) 
     water_pixels = arr_db[water_mask > 0]
     if water_pixels.size < 500:
         # Not enough water pixels in this bbox — likely a land area
-        return []
+        return [], None
 
     # ── 3. Normalise water pixels to uint8 for OpenCV ─────────────────────────
     db_min = float(np.percentile(water_pixels, 2))
     db_max = float(np.percentile(water_pixels, 98))
     if db_max - db_min < 1.0:
-        return []
+        return [], None
 
     gray = np.clip((arr_db - db_min) / (db_max - db_min) * 255, 0, 255).astype(np.uint8)
 
@@ -480,7 +480,7 @@ def detect_oil_spills(arr: np.ndarray, transform_info: dict, bbox: list[float]) 
         })
 
     results.sort(key=lambda r: r["area_km2"], reverse=True)
-    return results
+    return results, None
 
 
 @app.get("/detect-oil-spill")
@@ -507,7 +507,7 @@ async def detect_oil_spill(
 
     print(f"[oil-spill] SAR array shape={arr.shape} min={arr.min():.4f} max={arr.max():.4f} mean={arr.mean():.4f}")
 
-    spills = detect_oil_spills(arr, transform_info, [min_lon, min_lat, max_lon, max_lat])
+    spills, _ = detect_oil_spills(arr, transform_info, [min_lon, min_lat, max_lon, max_lat])
 
     print(f"[oil-spill] Detected {len(spills)} spills")
 
@@ -517,4 +517,152 @@ async def detect_oil_spill(
         "spills":       spills,
         "source":       "Sentinel-1 GRD via Copernicus Data Space",
         "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+# ── Industrial Kiln Detection ──────────────────────────────────────────────────
+
+import torch
+import torch.nn as nn
+from sklearn.preprocessing import MinMaxScaler as TorchScaler
+from fastapi import UploadFile, File, Form
+
+KILN_MODEL_PATH = os.path.join(BASE_DIR, "..", "Ecothon_AQI", "models", "aqi_lstm_model.pth")
+
+class AQILSTM(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(1, 32, 2, batch_first=True)
+        self.fc   = nn.Linear(32, 1)
+
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        return self.fc(x[:, -1, :])
+
+_kiln_lstm: AQILSTM | None = None
+
+def get_kiln_lstm() -> AQILSTM:
+    global _kiln_lstm
+    if _kiln_lstm is None:
+        model = AQILSTM()
+        if os.path.exists(KILN_MODEL_PATH):
+            model.load_state_dict(torch.load(KILN_MODEL_PATH, map_location="cpu"))
+        model.eval()
+        _kiln_lstm = model
+    return _kiln_lstm
+
+
+@app.post("/detect-kilns")
+async def detect_kilns(
+    image: UploadFile = File(...),
+    min_lat: float = Form(20.0),
+    min_lon: float = Form(70.0),
+    max_lat: float = Form(30.0),
+    max_lon: float = Form(80.0),
+):
+    """
+    Accepts a satellite image + bounding box, runs YOLOv8 kiln detection,
+    computes emission scores, and returns LSTM-based AQI forecast.
+    """
+    try:
+        from ultralytics import YOLO
+        import cv2
+    except ImportError:
+        raise HTTPException(503, "ultralytics / opencv not installed.")
+
+    contents = await image.read()
+    arr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(400, "Could not decode image")
+    img = cv2.resize(img, (640, 640))
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # YOLOv8 detection
+    yolo = YOLO("yolov8n.pt")
+    results = yolo.predict(img_rgb, verbose=False)
+
+    detections = []
+    for r in results:
+        for box in r.boxes.xyxy.cpu().numpy():
+            x1, y1, x2, y2 = box
+            area = (x2 - x1) * (y2 - y1)
+            detections.append((x1, y1, x2, y2, float(area)))
+
+    # Draw bounding boxes on annotated image
+    import base64
+    vis = img_rgb.copy()
+    for x1, y1, x2, y2, _ in detections:
+        cv2.rectangle(vis, (int(x1), int(y1)), (int(x2), int(y2)), (255, 60, 60), 2)
+        cv2.putText(vis, "Kiln", (int(x1), max(int(y1) - 6, 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 60, 60), 1)
+    _, buf = cv2.imencode(".png", cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+    detection_image_b64 = base64.b64encode(buf.tobytes()).decode()
+
+    # Map pixel coords → real geo coords using bbox
+    lat_range = max_lat - min_lat
+    lon_range = max_lon - min_lon
+    kilns = []
+    for x1, y1, x2, y2, area in detections:
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+        lat = max_lat - (cy / 640) * lat_range
+        lon = min_lon + (cx / 640) * lon_range
+        score = float(area / (640 * 640))
+        severity = "High" if score > 0.05 else ("Medium" if score > 0.01 else "Low")
+        kilns.append({
+            "latitude":       round(float(lat), 6),
+            "longitude":      round(float(lon), 6),
+            "emission_score": float(score),
+            "severity":       severity,
+        })
+
+    # LSTM AQI forecast using emission scores as proxy series
+    lstm = get_kiln_lstm()
+    if kilns:
+        scores = np.array([k["emission_score"] for k in kilns], dtype=np.float32).reshape(-1, 1)
+        sc = TorchScaler()
+        scaled = sc.fit_transform(scores)
+        X = torch.tensor(scaled, dtype=torch.float32).unsqueeze(-1)
+        with torch.no_grad():
+            pred = lstm(X)
+        predicted_aqi = float(sc.inverse_transform(pred.numpy().reshape(-1, 1))[0][0]) * 500
+    else:
+        predicted_aqi = 0.0
+
+    # Generate Folium pollution map as HTML string
+    map_html: str | None = None
+    if kilns:
+        try:
+            import folium
+            center = [kilns[0]["latitude"], kilns[0]["longitude"]]
+            m = folium.Map(location=center, zoom_start=8)
+            for k in kilns:
+                color = "#ef4444" if k["severity"] == "High" else ("#f97316" if k["severity"] == "Medium" else "#22c55e")
+                folium.CircleMarker(
+                    location=[k["latitude"], k["longitude"]],
+                    radius=10,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    popup=folium.Popup(
+                        f"<b>Severity:</b> {k['severity']}<br>"
+                        f"<b>Emission Score:</b> {k['emission_score']:.4f}<br>"
+                        f"<b>Lat:</b> {k['latitude']}<br>"
+                        f"<b>Lon:</b> {k['longitude']}",
+                        max_width=200,
+                    ),
+                    tooltip=f"{k['severity']} emitter",
+                ).add_to(m)
+            map_html = m._repr_html_()
+        except ImportError:
+            map_html = None
+
+    return {
+        "kiln_count":       len(kilns),
+        "predicted_aqi":    round(max(0.0, predicted_aqi), 2),
+        "kilns":            kilns,
+        "detection_image":  detection_image_b64,
+        "map_html":         map_html,
+        "generated_at":     datetime.utcnow().isoformat() + "Z",
     }

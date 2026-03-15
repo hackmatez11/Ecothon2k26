@@ -76,58 +76,57 @@ export async function resolveCityCoords(city: string): Promise<[number, number] 
   return null;
 }
 
-// WAQI API key should ideally be in .env
-const WAQI_TOKEN = import.meta.env.VITE_WAQI_TOKEN || 'demo';
-
 export async function fetchAQIData(city: string, lat?: number | null, lng?: number | null): Promise<AQIData> {
   try {
-    let query = (lat && lng) ? `geo:${lat};${lng}` : city;
-    
-    // First attempt: Direct feed
-    let response = await fetch(`https://api.waqi.info/feed/${encodeURIComponent(query)}/?token=${WAQI_TOKEN}`);
-    let data = await response.json();
+    // Resolve coords from city name if not provided
+    let resolvedLat = lat;
+    let resolvedLng = lng;
+    if (!resolvedLat || !resolvedLng) {
+      const coords = await resolveCityCoords(city);
+      if (coords) [resolvedLat, resolvedLng] = coords;
+    }
 
-    // Fix: If demo token returns Shanghai for an Indian city, or if direct fetch fails
-    const isShanghaiMismatch = data.status === 'ok' && 
-                               data.data.city.name.toLowerCase().includes('shanghai') && 
-                               city.toLowerCase().includes('delhi');
-
-    if (data.status !== 'ok' || isShanghaiMismatch) {
-      // Second attempt: Search for the station first
-      const searchKeyword = city.toLowerCase().includes('india') ? city : `${city}, India`;
-      const searchRes = await fetch(`https://api.waqi.info/search/?keyword=${encodeURIComponent(searchKeyword)}&token=${WAQI_TOKEN}`);
-      const searchData = await searchRes.json();
-      
-      if (searchData.status === 'ok' && searchData.data.length > 0) {
-        // Find the first station that mentions the city and isn't Shanghai
-        const bestStation = searchData.data.find((s: any) => 
-          !s.station.name.toLowerCase().includes('shanghai')
-        ) || searchData.data[0];
-        
-        // Fetch specific station feed
-        const stationResponse = await fetch(`https://api.waqi.info/feed/@${bestStation.uid}/?token=${WAQI_TOKEN}`);
-        data = await stationResponse.json();
+    if (resolvedLat && resolvedLng) {
+      const readings = await fetchOpenAQReadings(resolvedLat, resolvedLng, 25);
+      if (readings.length > 0) {
+        const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+        const aqiAvg  = Math.round(avg(readings.map(r => r.aqi)));
+        const pm25Avg = avg(readings.map(r => r.pm25 ?? 0));
+        return {
+          aqi:      aqiAvg,
+          pm25:     Math.round(pm25Avg * 10) / 10,
+          pm10:     0,
+          no2:      0,
+          so2:      0,
+          co:       0,
+          category: getAQICategory(aqiAvg),
+          city,
+        };
       }
     }
-
-    if (data.status === 'ok') {
-      const iaqi = data.data.iaqi;
-      return {
-        aqi: data.data.aqi,
-        pm25: iaqi.pm25?.v || 0,
-        pm10: iaqi.pm10?.v || 0,
-        no2: iaqi.no2?.v || 0,
-        so2: iaqi.so2?.v || 0,
-        co: iaqi.co?.v || 0,
-        category: getAQICategory(data.data.aqi),
-        city: data.data.city.name
-      };
-    }
-    throw new Error('Could not fetch AQI data');
-  } catch (error) {
-    console.error('AQI Fetch Error:', error);
-    return getMockAQIData(city);
+  } catch (err) {
+    console.warn('OpenAQ fetch failed:', err);
   }
+
+  return getMockAQIData(city);
+}
+
+/** Convert PM2.5 µg/m³ → US AQI (EPA breakpoints) — used for OpenAQ direct path */
+function pm25ToAQI(pm25: number): number {
+  const bp = [
+    [0,    12,    0,   50],
+    [12.1, 35.4,  51,  100],
+    [35.5, 55.4,  101, 150],
+    [55.5, 150.4, 151, 200],
+    [150.5,250.4, 201, 300],
+    [250.5,500.4, 301, 500],
+  ];
+  for (const [cLo, cHi, iLo, iHi] of bp) {
+    if (pm25 >= cLo && pm25 <= cHi) {
+      return Math.round(((iHi - iLo) / (cHi - cLo)) * (pm25 - cLo) + iLo);
+    }
+  }
+  return Math.min(500, Math.round(pm25 * 2));
 }
 
 export function getAQICategory(aqi: number): AQIData['category'] {
@@ -242,24 +241,6 @@ export async function fetchOpenAQReadings(
     console.warn('OpenAQ fetch failed:', err);
     return [];
   }
-}
-
-/** Convert PM2.5 µg/m³ to US AQI (EPA breakpoints) */
-function pm25ToAQI(pm25: number): number {
-  const bp = [
-    [0,    12,    0,   50],
-    [12.1, 35.4,  51,  100],
-    [35.5, 55.4,  101, 150],
-    [55.5, 150.4, 151, 200],
-    [150.5,250.4, 201, 300],
-    [250.5,500.4, 301, 500],
-  ];
-  for (const [cLo, cHi, iLo, iHi] of bp) {
-    if (pm25 >= cLo && pm25 <= cHi) {
-      return Math.round(((iHi - iLo) / (cHi - cLo)) * (pm25 - cLo) + iLo);
-    }
-  }
-  return Math.min(500, Math.round(pm25 * 2));
 }
 
 // ── Overpass API ───────────────────────────────────────────────────────────────
@@ -412,11 +393,12 @@ export interface OilSpill {
 }
 
 export interface OilSpillResponse {
-  bbox:         [number, number, number, number];
-  spill_count:  number;
-  spills:       OilSpill[];
-  source:       string;
-  generated_at: string;
+  bbox:             [number, number, number, number];
+  spill_count:      number;
+  spills:           OilSpill[];
+  detection_image:  string | null;
+  source:           string;
+  generated_at:     string;
 }
 
 /**
