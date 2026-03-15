@@ -1,4 +1,4 @@
-import { Leaf, Brain, Mountain, Wind, TrendingUp, AlertTriangle, MessageCircle, MapPin, Loader2, Search } from "lucide-react";
+import { Leaf, Brain, Mountain, Wind, TrendingUp, AlertTriangle, MessageCircle, MapPin, Loader2, Search, Satellite } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { fetchAQIData, AQIData, getAQIColor, fetchPredictionData, PredictionResponse } from "@/lib/environmental";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { AqiMap } from "@/components/AqiMap";
 import { SatelliteMap } from "@/components/SatelliteMap";
 
@@ -138,7 +139,7 @@ const EnvironmentalDashboard = () => {
         <SatelliteMap city={city} />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-2 gap-6">
         <Card className="border-primary/5 shadow-md">
           <CardHeader className="bg-primary/5 border-b py-3 px-4">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-primary text-center">
@@ -201,15 +202,65 @@ const EnvironmentalDashboard = () => {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {predictionData && predictionData.forecast && (
+          <Card className="border-blue-500/20 shadow-lg bg-blue-500/5">
+            <CardHeader className="bg-white/50 dark:bg-black/20 border-b py-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <CardTitle className="flex items-center gap-2 text-lg font-bold text-blue-600">
+                  <Satellite className="h-5 w-5" />
+                  AI Projection
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="mb-4 flex flex-col items-center">
+                 <span className="text-sm text-muted-foreground font-medium mb-1">Current Modeled AQI</span>
+                 <span className="font-bold text-4xl" style={{ color: getAQIColor(predictionData.current_aqi) }}>
+                   {predictionData.current_aqi}
+                 </span>
+              </div>
+              
+              <div className="space-y-1.5 mb-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b pb-2 mb-3">14-Day Trajectory</p>
+                <div className="max-h-[220px] overflow-y-auto pr-2 space-y-2 scrollbar-thin">
+                  {predictionData.forecast.map((day, i) => (
+                    <div key={i} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground w-20">{day.day}</span>
+                      <div className="flex-1 mx-3 h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-1000" 
+                          style={{ 
+                            width: `${Math.min(100, (day.aqi / 300) * 100)}%`,
+                            backgroundColor: day.color 
+                          }} 
+                        />
+                      </div>
+                      <span className="font-medium w-10 text-right" style={{ color: day.color }}>
+                        {Math.round(day.aqi)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t flex flex-col items-center gap-2 text-xs text-muted-foreground">
+                <p>Real atmospheric column analysis generated at {new Date(predictionData.generated_at).toLocaleTimeString()}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
-          <CardHeader className="py-3 px-4 border-b bg-muted/30">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider">Source Attribution</CardTitle>
+          <CardHeader className="py-4 border-b bg-muted/30">
+            <CardTitle className="text-lg font-bold">Source Attribution</CardTitle>
           </CardHeader>
-          <CardContent className="pt-4">
-            <ResponsiveContainer width="100%" height={160}>
+          <CardContent className="pt-6">
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={sourceData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} dataKey="value" paddingAngle={4}>
+                <Pie data={sourceData} cx="50%" cy="50%" innerRadius={70} outerRadius={100} dataKey="value" paddingAngle={4}>
                   {sourceData.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} stroke="none" />
                   ))}
@@ -217,20 +268,21 @@ const EnvironmentalDashboard = () => {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div className="space-y-1.5 mt-2">
+            <div className="space-y-3 mt-6">
               {sourceData.map((s) => (
-                <div key={s.name} className="flex items-center justify-between text-[11px] group cursor-help">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                    <span className="text-muted-foreground group-hover:text-foreground transition-colors">{s.name}</span>
+                <div key={s.name} className="flex items-center justify-between text-sm group cursor-help">
+                  <div className="flex items-center gap-3">
+                    <div className="h-3 w-3 rounded-full shadow-sm" style={{ background: s.color }} />
+                    <span className="text-muted-foreground font-medium group-hover:text-foreground transition-colors">{s.name}</span>
                   </div>
-                  <span className="font-semibold text-foreground">{s.value}%</span>
+                  <span className="font-bold text-foreground text-base">{s.value}%</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       </div>
+
 
       <div>
         <div className="flex items-center justify-between mb-4">
