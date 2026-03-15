@@ -10,9 +10,7 @@ import { VoiceComplaint } from "@/components/dashboard/VoiceComplaint";
 import { ComplaintTracking } from "@/components/dashboard/ComplaintTracking";
 import { GovernmentActions } from "@/components/dashboard/GovernmentActions";
 import { EcoBot } from "@/components/dashboard/EcoBot";
-import { EnvironmentalTips } from "@/components/dashboard/EnvironmentalTips";
 import { EnvironmentalAlerts } from "@/components/dashboard/EnvironmentalAlerts";
-import { CitizenParticipation } from "@/components/dashboard/CitizenParticipation";
 import { SoilAnalysis } from "@/components/dashboard/SoilAnalysis";
 import { CityAQIAreas } from "@/components/dashboard/CityAQIAreas";
 import SubmitComplaint from "@/pages/SubmitComplaint";
@@ -27,8 +25,9 @@ function DashboardHome() {
       <EnvironmentalAlerts />
       <PollutionPrediction />
       <GovernmentActions />
-      <CitizenParticipation />
-      <EnvironmentalTips />
+      <EnvironmentalAlerts />
+      <PollutionPrediction />
+      <GovernmentActions />
     </div>
   );
 }
@@ -60,9 +59,7 @@ export default function CitizenDashboard() {
               <Route path="track" element={<ComplaintTracking />} />
               <Route path="voice" element={<VoiceComplaint />} />
               <Route path="eco-bot" element={<EcoBot />} />
-              <Route path="tips" element={<EnvironmentalTips />} />
               <Route path="actions" element={<GovernmentActions />} />
-              <Route path="participate" element={<CitizenParticipation />} />
               <Route path="complaint" element={<SubmitComplaint />} />
               <Route path="oil-spill" element={<OilSpillDetection />} />
             </Routes>

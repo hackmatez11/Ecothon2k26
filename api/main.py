@@ -10,11 +10,24 @@ import joblib
 import tensorflow as tf
 import httpx
 from datetime import datetime, timedelta
-import os
-import time
-from io import BytesIO
 from dotenv import load_dotenv
+import os
+from twilio.rest import Client
+
 load_dotenv()
+
+# Twilio Configuration
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        print("✅ Twilio client initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize Twilio client: {e}")
 
 # ── Model paths ────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -216,6 +229,46 @@ async def openaq_proxy(
 @app.get("/health")
 async def health():
     return {"status": "ok", "models_loaded": lstm_model is not None}
+
+
+@app.post("/send-aqi-alert")
+async def send_aqi_alert(
+    phone: str = Query(..., description="Recipient phone number"),
+    city: str = Query(..., description="City name"),
+    lat: float = Query(None),
+    lng: float = Query(None),
+):
+    if not twilio_client:
+        raise HTTPException(503, "Twilio client not configured")
+
+    try:
+        # Get today's prediction
+        # We can reuse the logic from predict() or just fetch current AQI
+        if lat is not None and lng is not None:
+            raw = await fetch_openmeteo_air_quality(lat, lng)
+            _, aqi_daily_real = parse_daily_averages(raw)
+            current_aqi = round(float(np.mean(aqi_daily_real[-3:])), 1) if aqi_daily_real else 150 # fallback
+        else:
+            current_aqi = 155 # Default fallback if no coords
+
+        cat = aqi_category(current_aqi)
+        
+        message_body = (
+            f"🌍 EcoThon Alert for {city}:\n"
+            f"Today's Predicted AQI: {current_aqi} ({cat['label']}).\n"
+            f"Stay safe! 😷"
+        )
+
+        message = twilio_client.messages.create(
+            body=message_body,
+            from_=TWILIO_PHONE_NUMBER,
+            to=phone
+        )
+
+        return {"status": "success", "message_sid": message.sid, "aqi": current_aqi}
+    except Exception as e:
+        print(f"Error sending Twilio alert: {e}")
+        raise HTTPException(500, f"Failed to send alert: {str(e)}")
 
 
 @app.get("/predict")

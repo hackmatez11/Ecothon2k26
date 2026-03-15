@@ -1,3 +1,9 @@
+export interface WaterQualityData {
+  ph: number;
+  status: 'Safe' | 'Moderate' | 'Poor';
+  label: string;
+}
+
 export interface AQIData {
   aqi: number;
   pm25: number;
@@ -8,6 +14,36 @@ export interface AQIData {
   category: 'Good' | 'Moderate' | 'Unhealthy' | 'Hazardous';
   city: string;
 }
+
+export interface EnvironmentalAlert {
+  icon?: any;
+  title: string;
+  desc: string;
+  recs: string[];
+  severity: 'danger' | 'moderate' | 'success' | 'warning';
+  aqi?: number;
+}
+
+export const STATIC_ALERTS: EnvironmentalAlert[] = [
+  {
+    title: "Water Contamination Warning - Yamuna",
+    desc: "Elevated levels of industrial discharge detected.",
+    recs: ["Boil water before drinking", "Avoid river contact", "Report unusual discharge"],
+    severity: "moderate",
+  },
+  {
+    title: "Forest Fire Risk - Uttarakhand",
+    desc: "Dry conditions increasing wildfire probability.",
+    recs: ["Report smoke sightings", "Avoid forest campfires", "Follow evacuation notices"],
+    severity: "danger",
+  },
+  {
+    title: "Extreme Weather Advisory",
+    desc: "Heavy rainfall expected in next 48 hours.",
+    recs: ["Secure loose objects", "Avoid waterlogged areas", "Keep emergency kit ready"],
+    severity: "moderate",
+  },
+];
 
 export interface PredictionData {
   day: string;
@@ -76,40 +112,77 @@ export async function resolveCityCoords(city: string): Promise<[number, number] 
   return null;
 }
 
-export async function fetchAQIData(city: string, lat?: number | null, lng?: number | null): Promise<AQIData> {
-  try {
-    // Resolve coords from city name if not provided
-    let resolvedLat = lat;
-    let resolvedLng = lng;
-    if (!resolvedLat || !resolvedLng) {
-      const coords = await resolveCityCoords(city);
-      if (coords) [resolvedLat, resolvedLng] = coords;
-    }
+const aqiDataCache = new Map<string, { data: AQIData; ts: number }>();
+const pendingAqiRequests = new Map<string, Promise<AQIData>>();
+const AQI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
-    if (resolvedLat && resolvedLng) {
-      const readings = await fetchOpenAQReadings(resolvedLat, resolvedLng, 25);
-      if (readings.length > 0) {
-        const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-        const aqiAvg  = Math.round(avg(readings.map(r => r.aqi)));
-        const pm25Avg = avg(readings.map(r => r.pm25 ?? 0));
-        return {
-          aqi:      aqiAvg,
-          pm25:     Math.round(pm25Avg * 10) / 10,
-          pm10:     0,
-          no2:      0,
-          so2:      0,
-          co:       0,
-          category: getAQICategory(aqiAvg),
-          city,
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('OpenAQ fetch failed:', err);
+export async function fetchAQIData(city: string, lat?: number | null, lng?: number | null): Promise<AQIData> {
+  const cacheKey = city.toLowerCase().trim();
+  
+  // 1. Coalesce simultaneous requests for the same city
+  const inFlight = pendingAqiRequests.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  // 2. Check cache
+  const cached = aqiDataCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < AQI_CACHE_TTL) {
+    return cached.data;
   }
 
-  return getMockAQIData(city);
+  // 3. Initiate fetch with de-duplication
+  const fetchPromise = (async () => {
+    try {
+      // Resolve coords from city name if not provided
+      let resolvedLat = lat;
+      let resolvedLng = lng;
+      if (!resolvedLat || !resolvedLng) {
+        const coords = await resolveCityCoords(city);
+        if (coords) [resolvedLat, resolvedLng] = coords;
+      }
+
+      if (resolvedLat && resolvedLng) {
+        const readings = await fetchOpenAQReadings(resolvedLat, resolvedLng, 25);
+        if (readings.length > 0) {
+          const getAvg = (vals: (number | null)[]) => {
+            const filtered = vals.filter((v): v is number => v !== null);
+            return filtered.length > 0 ? filtered.reduce((a, b) => a + b, 0) / filtered.length : 0;
+          };
+
+          const aqiAvg = Math.round(getAvg(readings.map(r => r.aqi)));
+          
+          const result = {
+            aqi:      aqiAvg,
+            pm25:     Math.round(getAvg(readings.map(r => r.pm25)) * 10) / 10,
+            pm10:     Math.round(getAvg(readings.map(r => r.pm10)) * 10) / 10,
+            no2:      Math.round(getAvg(readings.map(r => r.no2)) * 10) / 10,
+            so2:      Math.round(getAvg(readings.map(r => r.so2)) * 10) / 10,
+            co:       Math.round(getAvg(readings.map(r => r.co)) * 100) / 100,
+            category: getAQICategory(aqiAvg),
+            city,
+          };
+          // Update cache with a fresh successful result
+          aqiDataCache.set(cacheKey, { data: result, ts: Date.now() });
+          return result;
+        }
+      }
+    } catch (err) {
+      console.warn('OpenAQ fetch failed:', err);
+    } finally {
+      // Always cleanup pending map so future requests can proceed
+      pendingAqiRequests.delete(cacheKey);
+    }
+
+    // Fallback 1: Return stale cache if available (even if expired) to prevent "N/A" flickering
+    if (cached) return cached.data;
+
+    // Fallback 2: Return empty mock data
+    return getMockAQIData(city);
+  })();
+
+  pendingAqiRequests.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
+
 
 /** Convert PM2.5 µg/m³ → US AQI (EPA breakpoints) — used for OpenAQ direct path */
 function pm25ToAQI(pm25: number): number {
@@ -145,15 +218,46 @@ export function getAQIColor(aqi: number): string {
 
 function getMockAQIData(city: string): AQIData {
   return {
-    aqi: 145,
-    pm25: 55,
-    pm10: 82,
-    no2: 12,
-    so2: 5,
-    co: 0.8,
-    category: 'Unhealthy',
+    aqi: 0,
+    pm25: 0,
+    pm10: 0,
+    no2: 0,
+    so2: 0,
+    co: 0,
+    category: 'Good',
     city: city || 'Unknown City'
   };
+}
+
+/**
+ * Simulates deterministic water quality data based on city name.
+ */
+export function simulateWaterQuality(city: string): WaterQualityData {
+  const cityName = city || 'New Delhi';
+  // Deterministic seed from city name
+  let hash = 0;
+  for (let i = 0; i < cityName.length; i++) {
+    hash = cityName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Use hash to derive a pH between 6.5 and 8.5
+  // (hash % 20) / 10 gives 0.0 to 1.9, added to 6.6
+  const phOffset = Math.abs(hash % 20) / 10;
+  const ph = Math.round((6.6 + phOffset) * 10) / 10;
+  
+  let status: WaterQualityData['status'] = 'Safe';
+  let label = 'Stable (Excellent)';
+
+  if (ph < 6.8 || ph > 8.0) {
+    status = 'Moderate';
+    label = 'Balanced (Good)';
+  }
+  if (ph < 6.5 || ph > 8.5) {
+    status = 'Poor';
+    label = 'Attention (Check Filters)';
+  }
+
+  return { ph, status, label };
 }
 
 /**
@@ -177,8 +281,12 @@ export interface OpenAQReading {
   lat: number;
   lng: number;
   locationName: string;
-  aqi: number;        // derived from PM2.5 if available, else best available
+  aqi: number;
   pm25: number | null;
+  pm10: number | null;
+  no2: number | null;
+  so2: number | null;
+  co: number | null;
   parameter: string;
 }
 
@@ -188,59 +296,70 @@ export interface OpenAQReading {
 export async function fetchOpenAQReadings(
   lat: number,
   lng: number,
-  radiusKm = 25,
+  initialRadiusKm = 25,
 ): Promise<OpenAQReading[]> {
-  try {
-    const sentinelBase = import.meta.env.VITE_SENTINEL_API_URL ?? 'http://localhost:8000';
-    const url = `${sentinelBase}/openaq?lat=${lat}&lng=${lng}&radius=${radiusKm * 1000}&limit=20`;
+  const radii = [initialRadiusKm, 50, 100]; // Multi-step expansion
+  
+  for (const radiusKm of radii) {
+    try {
+      const sentinelBase = import.meta.env.VITE_SENTINEL_API_URL ?? 'http://localhost:8000';
+      const url = `${sentinelBase}/openaq?lat=${lat}&lng=${lng}&radius=${radiusKm * 1000}&limit=20`;
 
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`OpenAQ ${res.status}`);
-    const data = await res.json();
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`OpenAQ ${res.status}`);
+      const data = await res.json();
 
-    // v3 enriched: each result has sensors[] for metadata and latestReadings[] for values
-    return (data.results ?? [])
-      .filter((loc: any) => loc.coordinates?.latitude && loc.coordinates?.longitude)
-      .map((loc: any) => {
-        const sensors: any[]  = loc.sensors ?? [];
-        const readings: any[] = loc.latestReadings ?? [];
+      const results = (data.results ?? [])
+        .filter((loc: any) => loc.coordinates?.latitude && loc.coordinates?.longitude)
+        .map((loc: any) => {
+          const sensors: any[]  = loc.sensors ?? [];
+          const readings: any[] = loc.latestReadings ?? [];
 
-        // Build a sensorId → value map from latest readings
-        const valueMap: Record<number, number> = {};
-        for (const r of readings) {
-          if (r.sensorsId != null && r.value != null) valueMap[r.sensorsId] = r.value;
-        }
+          const valueMap: Record<number, number> = {};
+          for (const r of readings) {
+            if (r.sensorsId != null && r.value != null) valueMap[r.sensorsId] = r.value;
+          }
 
-        // Find best sensor by preference: pm25 > pm10 > no2
-        const pm25Sensor = sensors.find((s: any) => s.parameter?.name === 'pm25');
-        const pm10Sensor = sensors.find((s: any) => s.parameter?.name === 'pm10');
-        const no2Sensor  = sensors.find((s: any) => s.parameter?.name === 'no2');
-        const best       = pm25Sensor ?? pm10Sensor ?? no2Sensor ?? sensors[0];
+          const pm25Sensor = sensors.find((s: any) => s.parameter?.name === 'pm25');
+          const pm10Sensor = sensors.find((s: any) => s.parameter?.name === 'pm10');
+          const no2Sensor  = sensors.find((s: any) => s.parameter?.name === 'no2');
+          const best       = pm25Sensor ?? pm10Sensor ?? no2Sensor ?? sensors[0];
 
-        if (!best) return null;
+          if (!best) return null;
 
-        const param   = best.parameter?.name as string ?? 'unknown';
-        const rawVal  = valueMap[best.id] ?? null;
-        const pm25Val = pm25Sensor ? (valueMap[pm25Sensor.id] ?? null) : null;
+          const param   = best.parameter?.name as string ?? 'unknown';
+          const rawVal  = valueMap[best.id] ?? null;
+          const pm25Val = sensors.find((s: any) => s.parameter?.name === 'pm25') ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'pm25').id] ?? null) : null;
+          const pm10Val = sensors.find((s: any) => s.parameter?.name === 'pm10') ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'pm10').id] ?? null) : null;
+          const no2Val  = sensors.find((s: any) => s.parameter?.name === 'no2')  ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'no2').id] ?? null) : null;
+          const so2Val  = sensors.find((s: any) => s.parameter?.name === 'so2')  ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'so2').id] ?? null) : null;
+          const coVal   = sensors.find((s: any) => s.parameter?.name === 'co')   ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'co').id] ?? null) : null;
 
-        if (rawVal === null) return null;
+          const aqi = pm25ToAQI(param === 'pm25' ? rawVal : rawVal * 0.6);
 
-        const aqi = pm25ToAQI(param === 'pm25' ? rawVal : rawVal * 0.6);
+          return {
+            lat:          loc.coordinates.latitude,
+            lng:          loc.coordinates.longitude,
+            locationName: loc.name ?? loc.locality ?? 'Unknown',
+            aqi:          Math.round(aqi),
+            pm25:         pm25Val,
+            pm10:         pm10Val,
+            no2:          no2Val,
+            so2:          so2Val,
+            co:           coVal,
+            parameter:    param,
+          } as OpenAQReading;
+        })
+        .filter((r: any): r is OpenAQReading => r !== null && r.aqi > 0);
 
-        return {
-          lat:          loc.coordinates.latitude,
-          lng:          loc.coordinates.longitude,
-          locationName: loc.name ?? loc.locality ?? 'Unknown',
-          aqi:          Math.round(aqi),
-          pm25:         pm25Val,
-          parameter:    param,
-        } as OpenAQReading;
-      })
-      .filter((r: any): r is OpenAQReading => r !== null && r.aqi > 0);
-  } catch (err) {
-    console.warn('OpenAQ fetch failed:', err);
-    return [];
+      if (results.length > 0) return results;
+      console.log(`No results at ${radiusKm}km, expanding...`);
+    } catch (err) {
+      console.warn(`OpenAQ fetch failed at ${radiusKm}km:`, err);
+    }
   }
+
+  return [];
 }
 
 // ── Overpass API ───────────────────────────────────────────────────────────────
@@ -420,6 +539,24 @@ export async function fetchOilSpills(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail ?? `Oil spill API error ${res.status}`);
+  }
+  return res.json();
+}
+/**
+ * Send an SMS alert via Twilio using the backend proxy.
+ */
+export async function sendTwilioAlert(phone: string, city: string, lat?: number | null, lng?: number | null): Promise<{ status: string; message_sid?: string }> {
+  const query = new URLSearchParams({ phone, city });
+  if (lat) query.append('lat', lat.toString());
+  if (lng) query.append('lng', lng.toString());
+
+  const res = await fetch(`${SENTINEL_API_URL}/send-aqi-alert?${query.toString()}`, {
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Twilio API error ${res.status}`);
   }
   return res.json();
 }

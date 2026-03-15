@@ -149,7 +149,7 @@ export function LiveEnvironmentalMap() {
         setForecast(fc);
         setIsSatellite(true);
         baseAqi = fc.current_aqi;
-      } catch { /* use WAQI aqi as base */ }
+      } catch { /* use OpenAQ as base */ }
 
       const [openaqReadings, overpassPlaces] = await Promise.all([
         fetchOpenAQReadings(lat, lng, 25),
@@ -380,6 +380,9 @@ export function LiveEnvironmentalMap() {
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-slate-400" />
                 <span className="text-[10px] text-muted-foreground">🗺 OSM place</span>
+              </div>
+              <div className="pt-1 mt-1 border-t border-dashed">
+                <span className="text-[9px] text-muted-foreground italic">Source: OpenAQ</span>
               </div>
             </div>
           </div>

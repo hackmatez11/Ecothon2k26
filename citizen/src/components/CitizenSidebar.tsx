@@ -23,9 +23,7 @@ const items = [
   { title: "Track Complaint", url: "/citizen-dashboard/track", icon: Search },
   { title: "Voice Complaint", url: "/citizen-dashboard/voice", icon: Mic },
   { title: "Eco Products Bot", url: "/citizen-dashboard/eco-bot", icon: ShoppingBag },
-  { title: "Environmental Tips", url: "/citizen-dashboard/tips", icon: Lightbulb },
   { title: "Government Actions", url: "/citizen-dashboard/actions", icon: Shield },
-  { title: "Get Involved", url: "/citizen-dashboard/participate", icon: TreePine },
 ];
 
 export function CitizenSidebar() {

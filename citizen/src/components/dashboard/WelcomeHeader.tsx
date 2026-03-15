@@ -2,45 +2,60 @@ import { MapPin, Wind, Droplets, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { useEffect, useState } from "react";
-import { fetchAQIData, AQIData } from "@/lib/environmental";
+import { fetchAQIData, AQIData, STATIC_ALERTS, simulateWaterQuality, WaterQualityData } from "@/lib/environmental";
 
 const statusColors = {
   safe: "bg-status-safe/10 text-status-safe border-status-safe/20",
   moderate: "bg-status-moderate/10 text-status-moderate border-status-moderate/20",
   danger: "bg-status-danger/10 text-status-danger border-status-danger/20",
+  poor: "bg-status-danger/10 text-status-danger border-status-danger/20",
 };
 
 export function WelcomeHeader() {
   const { profile, loading: profileLoading } = useProfile();
   const [aqiData, setAqiData] = useState<AQIData | null>(null);
+  const [waterData, setWaterData] = useState<WaterQualityData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadAQI() {
-      if (profile?.city) {
-        const data = await fetchAQIData(profile.city, profile.latitude, profile.longitude);
-        setAqiData(data);
-        setLoading(false);
-      } else if (!profileLoading) {
-        // Fallback for demo if no profile city
-        const data = await fetchAQIData("New Delhi", 28.6139, 77.2090);
-        setAqiData(data);
-        setLoading(false);
-      }
+    async function loadData() {
+      const city = profile?.city || "New Delhi";
+      const lat = profile?.latitude || 28.6139;
+      const lng = profile?.longitude || 77.2090;
+
+      const [aqi, water] = await Promise.all([
+        fetchAQIData(city, lat, lng),
+        Promise.resolve(simulateWaterQuality(city))
+      ]);
+
+      setAqiData(aqi);
+      setWaterData(water);
+      setLoading(false);
     }
-    loadAQI();
+    
+    if (!profileLoading) {
+      loadData();
+    }
   }, [profile, profileLoading]);
+
+  const totalAlerts = STATIC_ALERTS.length + (aqiData && aqiData.aqi > 100 ? 1 : 0);
 
   const statusCards = [
     { 
       title: "Air Quality", 
-      value: aqiData?.category || "Loading...", 
-      metric: aqiData ? `AQI ${aqiData.aqi}` : "Fetching...", 
+      value: aqiData?.category || "N/A", 
+      metric: aqiData && aqiData.aqi > 0 ? `AQI ${aqiData.aqi}` : "No Sensor Data", 
       icon: Wind, 
-      status: aqiData ? (aqiData.aqi < 100 ? "safe" : aqiData.aqi < 200 ? "moderate" : "danger") : "moderate" as const 
+      status: aqiData && aqiData.aqi > 0 ? (aqiData.aqi < 100 ? "safe" : aqiData.aqi < 200 ? "moderate" : "danger") : "safe" as const 
     },
-    { title: "Water Quality", value: "Average", metric: "pH 7.1", icon: Droplets, status: "moderate" as const },
-    { title: "Active Alerts", value: "2 Alerts", metric: "In your area", icon: AlertTriangle, status: "danger" as const },
+    { 
+      title: "Water Quality", 
+      value: waterData?.status || "Good", 
+      metric: waterData ? `pH ${waterData.ph} (${waterData.label})` : "pH 7.0 (Stable)", 
+      icon: Droplets, 
+      status: (waterData?.status.toLowerCase() || "safe") as any 
+    },
+    { title: "Active Alerts", value: `${totalAlerts} Alerts`, metric: "In your area", icon: AlertTriangle, status: totalAlerts > 0 ? "danger" : "safe" as const },
   ];
 
   if (profileLoading || loading) {

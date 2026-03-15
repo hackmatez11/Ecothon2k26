@@ -8,6 +8,7 @@ export interface UserProfile {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
+  phone_number: string | null;
 }
 
 export function useProfile() {
