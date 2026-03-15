@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 from twilio.rest import Client
+from typing import List, Tuple, cast
 
 load_dotenv()
 
@@ -110,7 +111,7 @@ async def fetch_openmeteo_air_quality(lat: float, lng: float) -> dict:
         return resp.json()
 
 
-def parse_daily_averages(raw: dict) -> tuple[list[float], list[float]]:
+def parse_daily_averages(raw: dict) -> tuple[list[str], list[float], list[float]]:
     times = raw["hourly"]["time"]
     co_h  = raw["hourly"]["carbon_monoxide"]
     aqi_h = raw["hourly"]["european_aqi"]
@@ -127,7 +128,7 @@ def parse_daily_averages(raw: dict) -> tuple[list[float], list[float]]:
     co_daily  = [float(np.mean(daily_co[d]))  for d in days if daily_co.get(d)]
     aqi_daily = [float(np.mean(daily_aqi[d])) for d in days if daily_aqi.get(d)]
 
-    return co_daily, aqi_daily
+    return days, co_daily, aqi_daily
 
 
 def co_to_qa(co_values: list[float]) -> list[float]:
@@ -142,14 +143,14 @@ def predict_aqi_series(co_daily: list[float]) -> list[float]:
     return aqi_model.predict(X_scaled, verbose=0).flatten().tolist()
 
 
-def physics_forecast(base_aqi: float, co_trend: float, days: int = 14) -> list[float]:
+def physics_forecast(base_aqi: float, co_trend: float, days: int = 14) -> List[float]:
     """
     Build a realistic 14-day forecast anchored to the real current AQI.
     Uses the CO trend from recent days to project direction, then adds
     a mild seasonal oscillation so the chart looks natural.
     co_trend: positive = CO rising (AQI worsening), negative = improving.
     """
-    forecast = []
+    forecast: List[float] = []
     aqi = base_aqi
     # Dampen the trend so it doesn't explode over 14 days
     daily_drift = np.clip(co_trend * 0.5, -8, 8)
@@ -160,7 +161,7 @@ def physics_forecast(base_aqi: float, co_trend: float, days: int = 14) -> list[f
         aqi = aqi + daily_drift + oscillation
         # Revert slightly toward base to prevent runaway drift
         aqi = aqi * 0.92 + base_aqi * 0.08
-        forecast.append(max(0.0, round(float(aqi), 1)))
+        forecast.append(max(0.0, float(aqi)))
 
     return forecast
 
@@ -246,8 +247,9 @@ async def send_aqi_alert(
         # We can reuse the logic from predict() or just fetch current AQI
         if lat is not None and lng is not None:
             raw = await fetch_openmeteo_air_quality(lat, lng)
-            _, aqi_daily_real = parse_daily_averages(raw)
+            _, _, aqi_daily_real = parse_daily_averages(raw)
             current_aqi = round(float(np.mean(aqi_daily_real[-3:])), 1) if aqi_daily_real else 150 # fallback
+
         else:
             current_aqi = 155 # Default fallback if no coords
 
@@ -284,7 +286,7 @@ async def predict(
     except Exception as e:
         raise HTTPException(502, f"Failed to fetch air quality data: {e}")
 
-    co_daily, aqi_daily_real = parse_daily_averages(raw)
+    days_list, co_daily, aqi_daily_real = parse_daily_averages(raw)
 
     if len(co_daily) < 2:
         raise HTTPException(422, "Insufficient air quality data for this location")
@@ -298,9 +300,11 @@ async def predict(
     else:
         current_aqi = float(np.mean(predicted_aqi_series[-3:]))
 
+
     # Step 3: CO trend over last 5 days → drives forecast direction
-    recent_co = co_daily[-5:] if len(co_daily) >= 5 else co_daily
+    recent_co: List[float] = list(co_daily[-5:]) if len(co_daily) >= 5 else list(co_daily)
     co_trend  = (recent_co[-1] - recent_co[0]) / max(len(recent_co) - 1, 1) / 1000.0
+
 
     # Step 4: Physics-based 14-day forecast anchored to real current AQI
     forecast_values = physics_forecast(current_aqi, co_trend, days=14)
@@ -319,14 +323,34 @@ async def predict(
             "color":    cat["color"],
         })
 
-    return {
+    # Step 5: Format History for chart
+    history = []
+    for day_str, aqi_val in zip(days_list, aqi_daily_real):
+        d_obj = datetime.strptime(day_str, "%Y-%m-%d")
+        f_val = float(aqi_val)
+        cat_info = aqi_category(f_val)
+        history.append({
+            "day":      d_obj.strftime("%b %d"),
+            "date":     day_str,
+            "aqi":      int(f_val),
+            "category": cat_info["label"],
+            "color":    cat_info["color"],
+        })
+
+
+    predict_res = {
         "lat":          lat,
         "lng":          lng,
-        "current_aqi":  round(current_aqi, 1),
+        "current_aqi":  round(float(current_aqi), 1),
+        "history":      history,
         "forecast":     forecast,
         "source":       "Sentinel-5P Dense model + Open-Meteo",
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
+    return cast(dict, predict_res)
+
+
+
 
 
 # ── Oil Spill Detection ────────────────────────────────────────────────────────
