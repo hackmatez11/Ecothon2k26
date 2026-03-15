@@ -24,4 +24,11 @@ export type Complaint = {
   severity: string;
   status: string;
   location: string;
+  resolution_plan?: string;
+  resolution_steps?: any[];
+  expected_timeline?: string;
+  plan_generated_at?: string;
+  plan_generated_by?: string;
+  initial_impact_score?: number;
+  target_impact_score?: number;
 };

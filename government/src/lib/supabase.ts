@@ -23,4 +23,6 @@ export type Complaint = {
   assigned_officer_id?: string;
   assigned_officer_name?: string;
   assignment_reason?: string;
+  initial_impact_score?: number;
+  target_impact_score?: number;
 };

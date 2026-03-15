@@ -111,6 +111,7 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
         ai_analysis: complaint.ai_analysis,
         image_url: complaint.image_url,
         assigned_officer_name: complaint.assigned_officer_name,
+        citizen_email: complaint.citizen_email,
       });
       setLivePlans(prev => ({ ...prev, [complaint.id]: plan }));
       setExpandedPlans(prev => new Set(prev).add(complaint.id));

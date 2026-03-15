@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { sendResolutionPlanEmail } from "./emailService";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY;
@@ -17,6 +18,8 @@ export interface ResolutionPlan {
   expected_timeline: string;
   resources_needed: string[];
   references: { title: string; url: string }[];
+  initial_score: number;
+  target_score: number;
 }
 
 /** Search Tavily for real-world resolution approaches */
@@ -97,6 +100,8 @@ Respond with ONLY this JSON structure:
   ],
   "expected_timeline": "<total expected resolution time, e.g. 7-14 days>",
   "resources_needed": ["<resource 1>", "<resource 2>"],
+  "initial_score": <number 0-100 representing current pollution/impact level>,
+  "target_score": <number 0-100 representing goal level after resolution>,
   "references": []
 }
 
@@ -141,6 +146,7 @@ export async function generateAndSaveResolutionPlan(
     ai_analysis: string;
     image_url?: string;
     assigned_officer_name?: string;
+    citizen_email: string;
   }
 ): Promise<ResolutionPlan> {
   // 1. Web search for best practices
@@ -165,11 +171,29 @@ export async function generateAndSaveResolutionPlan(
       expected_timeline: plan.expected_timeline,
       plan_generated_at: new Date().toISOString(),
       plan_generated_by: complaint.assigned_officer_name ?? "Government Officer",
+      initial_impact_score: plan.initial_score,
+      target_impact_score: plan.target_score,
       status: "in_progress",
     })
     .eq("id", complaintId);
 
   if (error) throw new Error("Failed to save plan: " + error.message);
+
+  // 4. Send email notification to citizen
+  const actionStepsText = plan.steps
+    .map(s => `• Step ${s.step}: ${s.title} - ${s.description} (${s.duration})`)
+    .join('\n');
+
+  await sendResolutionPlanEmail({
+    citizen_email: complaint.citizen_email,
+    complaint_id: complaintId,
+    description: complaint.description,
+    location: complaint.location || "Not specified",
+    resolution_summary: plan.summary,
+    action_steps: actionStepsText,
+    expected_timeline: plan.expected_timeline,
+    officer_name: complaint.assigned_officer_name || "Government Officer",
+  });
 
   return plan;
 }
