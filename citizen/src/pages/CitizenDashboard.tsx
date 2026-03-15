@@ -16,6 +16,7 @@ import { CitizenParticipation } from "@/components/dashboard/CitizenParticipatio
 import { SoilAnalysis } from "@/components/dashboard/SoilAnalysis";
 import { CityAQIAreas } from "@/components/dashboard/CityAQIAreas";
 import SubmitComplaint from "@/pages/SubmitComplaint";
+import OilSpillDetection from "@/pages/OilSpillDetection";
 
 function DashboardHome() {
   return (
@@ -63,6 +64,7 @@ export default function CitizenDashboard() {
               <Route path="actions" element={<GovernmentActions />} />
               <Route path="participate" element={<CitizenParticipation />} />
               <Route path="complaint" element={<SubmitComplaint />} />
+              <Route path="oil-spill" element={<OilSpillDetection />} />
             </Routes>
           </main>
         </div>

@@ -401,3 +401,43 @@ function generateFallbackForecast(baseAQI: number): PredictionData[] {
     aqi: Math.max(0, Math.round(baseAQI + Math.sin(i * 0.9) * 15)),
   }));
 }
+
+// ── Oil Spill Detection ────────────────────────────────────────────────────────
+
+export interface OilSpill {
+  latitude:  number;
+  longitude: number;
+  area_km2:  number;
+  severity:  'Minor' | 'Moderate' | 'Major';
+}
+
+export interface OilSpillResponse {
+  bbox:         [number, number, number, number];
+  spill_count:  number;
+  spills:       OilSpill[];
+  source:       string;
+  generated_at: string;
+}
+
+/**
+ * Call the FastAPI /detect-oil-spill endpoint with a bounding box derived
+ * from a center point + radius in degrees.
+ */
+export async function fetchOilSpills(
+  lat: number,
+  lng: number,
+  radiusDeg = 1.5,
+): Promise<OilSpillResponse> {
+  const min_lat = lat - radiusDeg;
+  const max_lat = lat + radiusDeg;
+  const min_lon = lng - radiusDeg;
+  const max_lon = lng + radiusDeg;
+
+  const url = `${SENTINEL_API_URL}/detect-oil-spill?min_lon=${min_lon}&min_lat=${min_lat}&max_lon=${max_lon}&max_lat=${max_lat}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Oil spill API error ${res.status}`);
+  }
+  return res.json();
+}

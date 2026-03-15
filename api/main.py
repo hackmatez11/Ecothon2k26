@@ -1,7 +1,5 @@
 """
-Sentinel-5P AQI Forecast API
-Fetches real CO + QA data from Open-Meteo Air Quality API (free, no key needed),
-runs it through the trained pipeline → LSTM to return a 14-day AQI forecast.
+Sentinel-5P AQI Forecast API + Oil Spill Detection API
 """
 
 from contextlib import asynccontextmanager
@@ -13,6 +11,8 @@ import tensorflow as tf
 import httpx
 from datetime import datetime, timedelta
 import os
+import time
+from io import BytesIO
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -272,5 +272,249 @@ async def predict(
         "current_aqi":  round(current_aqi, 1),
         "forecast":     forecast,
         "source":       "Sentinel-5P Dense model + Open-Meteo",
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+# ── Oil Spill Detection ────────────────────────────────────────────────────────
+
+CDSE_CLIENT_ID     = os.getenv("CDSE_CLIENT_ID", "")
+CDSE_CLIENT_SECRET = os.getenv("CDSE_CLIENT_SECRET", "")
+
+# Simple in-memory token cache
+_cdse_token: dict = {"access_token": None, "expires_at": 0.0}
+
+
+def get_cdse_token() -> str:
+    """Fetch (or return cached) OAuth2 token from Copernicus Data Space."""
+    if _cdse_token["access_token"] and time.time() < _cdse_token["expires_at"] - 30:
+        return _cdse_token["access_token"]
+
+    if not CDSE_CLIENT_ID or not CDSE_CLIENT_SECRET:
+        raise HTTPException(503, "CDSE credentials not configured. Set CDSE_CLIENT_ID and CDSE_CLIENT_SECRET in api/.env")
+
+    resp = httpx.post(
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
+        data={
+            "grant_type":    "client_credentials",
+            "client_id":     CDSE_CLIENT_ID,
+            "client_secret": CDSE_CLIENT_SECRET,
+        },
+        timeout=15,
+    )
+    if not resp.is_success:
+        raise HTTPException(502, f"CDSE auth failed: {resp.text}")
+
+    data = resp.json()
+    _cdse_token["access_token"] = data["access_token"]
+    _cdse_token["expires_at"]   = time.time() + data.get("expires_in", 600)
+    return _cdse_token["access_token"]
+
+
+async def fetch_sar_image(bbox: list[float], token: str) -> tuple[np.ndarray, dict]:
+    """
+    Request the latest Sentinel-1 GRD VV band for the given bbox from CDSE.
+    Returns (numpy float32 array, transform_info dict for pixel→geo mapping).
+    bbox = [min_lon, min_lat, max_lon, max_lat]
+    """
+    # Evalscript: return raw VV linear power as float32
+    evalscript = """
+//VERSION=3
+function setup() {
+  return {
+    input:  [{ bands: ["VV"], units: "LINEAR_POWER" }],
+    output: { bands: 1, sampleType: "FLOAT32" }
+  };
+}
+function evaluatePixel(s) { return [s.VV]; }
+"""
+    end_dt   = datetime.utcnow()
+    start_dt = end_dt - timedelta(days=30)   # look back 30 days for latest pass
+
+    payload = {
+        "input": {
+            "bounds": {
+                "bbox":       bbox,
+                "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+            },
+            "data": [{
+                "type": "S1GRD",
+                "dataFilter": {
+                    "timeRange": {
+                        "from": start_dt.strftime("%Y-%m-%dT00:00:00Z"),
+                        "to":   end_dt.strftime("%Y-%m-%dT23:59:59Z"),
+                    },
+                    "acquisitionMode": "IW",
+                    "polarization":    "DV",
+                    "resolution":      "HIGH",
+                },
+            }],
+        },
+        "output": {
+            "width":  512,
+            "height": 512,
+            "responses": [{"identifier": "default", "format": {"type": "image/tiff"}}],
+        },
+        "evalscript": evalscript,
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            "https://sh.dataspace.copernicus.eu/api/v1/process",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type":  "application/json",
+            },
+            json=payload,
+        )
+
+    if not resp.is_success:
+        raise HTTPException(502, f"Sentinel Hub Process API error {resp.status_code}: {resp.text[:300]}")
+
+    # Parse GeoTIFF bytes with rasterio
+    try:
+        import rasterio
+        with rasterio.open(BytesIO(resp.content)) as src:
+            arr      = src.read(1).astype(np.float32)
+            transform = src.transform   # affine transform for pixel→geo
+            crs       = str(src.crs)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to parse GeoTIFF: {e}")
+
+    transform_info = {
+        "c": transform.c,   # top-left x (longitude)
+        "f": transform.f,   # top-left y (latitude)
+        "a": transform.a,   # pixel width  (degrees per pixel)
+        "e": transform.e,   # pixel height (negative, degrees per pixel)
+        "crs": crs,
+    }
+    return arr, transform_info
+
+
+def detect_oil_spills(arr: np.ndarray, transform_info: dict, bbox: list[float]) -> list[dict]:
+    """
+    SAR oil spill detection on a float32 VV linear-power array from Sentinel-1.
+
+    Oil spills dampen sea surface roughness → very low VV backscatter.
+    Pipeline:
+      1. Convert linear power → dB
+      2. Mask out land (high dB values) — keep only water-like pixels
+      3. Adaptive threshold: pixels significantly darker than local water mean
+      4. Morphological clean-up
+      5. Contour → geo-coordinate mapping
+    """
+    import cv2
+
+    # ── 1. Linear power → dB ──────────────────────────────────────────────────
+    # Clip to avoid log(0); typical sea surface VV is -20 to -5 dB
+    arr_db = 10.0 * np.log10(np.clip(arr, 1e-10, None)).astype(np.float32)
+
+    # ── 2. Water mask — keep pixels in typical sea-surface range (-30 to 0 dB)
+    # Land returns are usually > 0 dB; very noisy pixels < -35 dB are invalid
+    water_mask = ((arr_db > -35.0) & (arr_db < 0.0)).astype(np.uint8) * 255
+
+    water_pixels = arr_db[water_mask > 0]
+    if water_pixels.size < 500:
+        # Not enough water pixels in this bbox — likely a land area
+        return []
+
+    # ── 3. Normalise water pixels to uint8 for OpenCV ─────────────────────────
+    db_min = float(np.percentile(water_pixels, 2))
+    db_max = float(np.percentile(water_pixels, 98))
+    if db_max - db_min < 1.0:
+        return []
+
+    gray = np.clip((arr_db - db_min) / (db_max - db_min) * 255, 0, 255).astype(np.uint8)
+
+    # ── 4. Speckle suppression ────────────────────────────────────────────────
+    filtered = cv2.medianBlur(gray, 5)
+
+    # ── 5. Dark-spot detection ────────────────────────────────────────────────
+    # Oil spills are significantly darker than surrounding water.
+    # Use Otsu's method on the water-only pixels for an adaptive threshold.
+    water_gray = filtered.copy()
+    water_gray[water_mask == 0] = 255   # exclude land from threshold calc
+    _, mask = cv2.threshold(water_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Only keep detections that are actually in the water mask
+    mask = cv2.bitwise_and(mask, water_mask)
+
+    # ── 6. Morphological clean-up ─────────────────────────────────────────────
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
+
+    # ── 7. Contour detection ──────────────────────────────────────────────────
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    results = []
+    pixel_size_m  = 10           # Sentinel-1 GRD HIGH ≈ 10 m/pixel
+    pixel_area_m2 = pixel_size_m ** 2
+
+    c = transform_info["c"]   # top-left longitude
+    f = transform_info["f"]   # top-left latitude
+    a = transform_info["a"]   # pixel width  (degrees)
+    e = transform_info["e"]   # pixel height (negative degrees)
+
+    for contour in contours:
+        area_px = cv2.contourArea(contour)
+        if area_px < 200:    # < ~0.02 km² — noise
+            continue
+
+        x, y, w, h = cv2.boundingRect(contour)
+        cx_px = x + w / 2
+        cy_px = y + h / 2
+
+        lon = c + cx_px * a
+        lat = f + cy_px * e
+
+        area_km2 = round((area_px * pixel_area_m2) / 1e6, 4)
+
+        severity = "Major" if area_km2 >= 1.0 else ("Moderate" if area_km2 >= 0.1 else "Minor")
+
+        results.append({
+            "latitude":  round(lat, 6),
+            "longitude": round(lon, 6),
+            "area_km2":  area_km2,
+            "severity":  severity,
+        })
+
+    results.sort(key=lambda r: r["area_km2"], reverse=True)
+    return results
+
+
+@app.get("/detect-oil-spill")
+async def detect_oil_spill(
+    min_lon: float = Query(..., description="Bounding box min longitude", ge=-180, le=180),
+    min_lat: float = Query(..., description="Bounding box min latitude",  ge=-90,  le=90),
+    max_lon: float = Query(..., description="Bounding box max longitude", ge=-180, le=180),
+    max_lat: float = Query(..., description="Bounding box max latitude",  ge=-90,  le=90),
+):
+    """
+    Fetch the latest Sentinel-1 SAR image for the given bounding box from
+    Copernicus Data Space, run the oil spill detection pipeline, and return
+    detected spill locations with area estimates.
+    """
+    # Validate bbox size — keep it reasonable (max ~5° × 5°)
+    if (max_lon - min_lon) > 5 or (max_lat - min_lat) > 5:
+        raise HTTPException(400, "Bounding box too large. Keep it under 5° × 5°.")
+
+    token = get_cdse_token()
+
+    arr, transform_info = await fetch_sar_image(
+        [min_lon, min_lat, max_lon, max_lat], token
+    )
+
+    print(f"[oil-spill] SAR array shape={arr.shape} min={arr.min():.4f} max={arr.max():.4f} mean={arr.mean():.4f}")
+
+    spills = detect_oil_spills(arr, transform_info, [min_lon, min_lat, max_lon, max_lat])
+
+    print(f"[oil-spill] Detected {len(spills)} spills")
+
+    return {
+        "bbox":         [min_lon, min_lat, max_lon, max_lat],
+        "spill_count":  len(spills),
+        "spills":       spills,
+        "source":       "Sentinel-1 GRD via Copernicus Data Space",
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
