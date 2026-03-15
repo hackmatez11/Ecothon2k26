@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TrafficAir — Pollution Estimator & Eco-Route Optimizer</title>
+  <meta name="description" content="Real-time traffic data to estimate air pollution hotspots and suggest eco-friendly routes using TomTom APIs."/>
+
+  <!-- TomTom Maps SDK -->
+  <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css"/>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js"></script>
+
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<div id="app">
+  <!-- ═══════ SIDE PANEL ═══════ -->
+  <aside id="panel">
+    <!-- Header -->
+    <div id="header">
+      <div class="logo-row">
+        <div class="logo-icon">🌿</div>
+        <div>
+          <h1>TrafficAir</h1>
+          <p>Pollution Estimator &amp; Eco-Route Optimizer</p>
+        </div>
+      </div>
+      <div class="live-badge"><span class="live-dot"></span> LIVE DATA</div>
+    </div>
+
+    <!-- Scrollable body -->
+    <div id="panel-scroll">
+
+      <!-- ── City Traffic Overview ── -->
+      <div class="section-title">📊 City Traffic Overview</div>
+      <div class="stat-grid">
+        <div class="stat-card blue" id="card-speed">
+          <div class="label">⚡ Avg Speed</div>
+          <div class="value" id="stat-speed">—</div>
+          <div class="unit">km/h</div>
+        </div>
+        <div class="stat-card orange" id="card-congestion">
+          <div class="label">🚦 Congestion</div>
+          <div class="value" id="stat-congestion">—</div>
+          <div class="unit">% of normal</div>
+        </div>
+        <div class="stat-card green" id="card-vehicles">
+          <div class="label">🚗 Est. Vehicles</div>
+          <div class="value" id="stat-vehicles">—</div>
+          <div class="unit">per km</div>
+        </div>
+        <div class="stat-card purple" id="card-aqi">
+          <div class="label">🌫 AQI Index</div>
+          <div class="value" id="stat-aqi">—</div>
+          <div class="unit">estimated</div>
+        </div>
+      </div>
+
+      <!-- ── Emission Levels ── -->
+      <div class="section-title">☁️ Estimated Emissions (Total)</div>
+
+      <div class="emission-item">
+        <div class="emission-header">
+          <div class="emission-name">
+            <span class="dot" style="background:#60a5fa"></span>CO₂
+            <span class="aqi-badge aqi-good" id="badge-co2">—</span>
+          </div>
+          <div class="emission-value" id="val-co2">— kg/h</div>
+        </div>
+        <div class="emission-bar-track">
+          <div class="emission-bar-fill" id="bar-co2" style="width:0%;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div>
+        </div>
+      </div>
+
+      <div class="emission-item">
+        <div class="emission-header">
+          <div class="emission-name">
+            <span class="dot" style="background:#f97316"></span>NOₓ
+            <span class="aqi-badge aqi-good" id="badge-nox">—</span>
+          </div>
+          <div class="emission-value" id="val-nox">— g/h</div>
+        </div>
+        <div class="emission-bar-track">
+          <div class="emission-bar-fill" id="bar-nox" style="width:0%;background:linear-gradient(90deg,#ea580c,#f97316)"></div>
+        </div>
+      </div>
+
+      <div class="emission-item">
+        <div class="emission-header">
+          <div class="emission-name">
+            <span class="dot" style="background:#a855f7"></span>PM2.5
+            <span class="aqi-badge aqi-good" id="badge-pm">—</span>
+          </div>
+          <div class="emission-value" id="val-pm">— g/h</div>
+        </div>
+        <div class="emission-bar-track">
+          <div class="emission-bar-fill" id="bar-pm" style="width:0%;background:linear-gradient(90deg,#9333ea,#a855f7)"></div>
+        </div>
+      </div>
+
+      <!-- ── Route Optimizer ── -->
+      <div class="section-title">🗺️ Eco-Route Optimizer</div>
+
+      <div class="input-group">
+        <label>Origin</label>
+        <div class="input-row">
+          <div class="icon origin">🔵</div>
+          <input type="text" id="input-origin" placeholder="e.g. India Gate, New Delhi" value="India Gate, New Delhi"/>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Destination</label>
+        <div class="input-row">
+          <div class="icon dest">🔴</div>
+          <input type="text" id="input-dest" placeholder="e.g. Connaught Place, New Delhi" value="Connaught Place, New Delhi"/>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-route">
+        <span id="btn-route-text">🔍 Find Routes</span>
+      </button>
+      <button class="btn btn-eco" id="btn-eco" style="display:none">
+        <span>🌿 Show Eco Route</span>
+      </button>
+
+      <div id="route-results"></div>
+
+      <!-- ── Hotspot Segments ── -->
+      <div class="section-title">🔥 Pollution Hotspots</div>
+      <div class="segment-list" id="segment-list">
+        <div class="text-muted text-center" style="padding:16px 0">Loading traffic data…</div>
+      </div>
+
+      <div style="height:24px"></div>
+    </div>
+  </aside>
+
+  <!-- ═══════ MAP ═══════ -->
+  <div id="map"></div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Scripts (load order matters) -->
+<script src="config.js"></script>
+<script src="emissions.js"></script>
+<script src="traffic.js"></script>
+<script src="heatmap.js"></script>
+<script src="routing.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
