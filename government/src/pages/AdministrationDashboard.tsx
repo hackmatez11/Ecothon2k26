@@ -44,28 +44,6 @@ const AdministrationDashboard = () => {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: "Active Tasks", value: "302", sub: "89 in progress", icon: ClipboardList, color: "text-blue-500" },
-          { title: "Budget Utilization", value: "92%", sub: "Of allocated", icon: Wallet, color: "text-purple-500" },
-          { title: "Staff Members", value: "156", sub: "12 departments", icon: Users, color: "text-green-500" },
-          { title: "Efficiency Rate", value: "87%", sub: "+5% this month", icon: TrendingUp, color: "text-orange-500" },
-        ].map((card) => (
-          <Card key={card.title} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground font-medium">{card.title}</span>
-                <card.icon className={`h-5 w-5 ${card.color}`} />
-              </div>
-              <div className="text-3xl font-bold text-foreground">{card.value}</div>
-              <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                {card.sub}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>

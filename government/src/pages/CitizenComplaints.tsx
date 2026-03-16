@@ -125,6 +125,22 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
     }
   };
 
+  const handleMarkResolved = async (complaint: ExtendedComplaint) => {
+    try {
+      const { error: err } = await supabase
+        .from('complaints')
+        .update({ status: 'resolved' })
+        .eq('id', complaint.id);
+      
+      if (err) throw err;
+      
+      toast.success('Complaint marked as resolved');
+      fetchComplaints();
+    } catch (e: any) {
+      toast.error('Failed to update status: ' + e.message);
+    }
+  };
+
   const pendingCount = complaints.filter(c => c.status === 'pending').length;
   const highSeverityCount = complaints.filter(c => c.severity === 'high').length;
 
@@ -284,6 +300,16 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {planExpanded ? <><ChevronUp className="w-3.5 h-3.5" />Hide Plan</> : <><ChevronDown className="w-3.5 h-3.5" />View Plan</>}
+                      </button>
+                    )}
+
+                    {complaint.status !== 'resolved' && (
+                      <button
+                        onClick={() => handleMarkResolved(complaint)}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors ml-auto shadow-sm"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Mark as Resolved
                       </button>
                     )}
                   </div>

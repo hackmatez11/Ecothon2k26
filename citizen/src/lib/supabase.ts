@@ -31,4 +31,5 @@ export type Complaint = {
   plan_generated_by?: string;
   initial_impact_score?: number;
   target_impact_score?: number;
+  citizen_phone?: string;
 };

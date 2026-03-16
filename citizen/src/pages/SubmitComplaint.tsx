@@ -99,6 +99,7 @@ export default function SubmitComplaint() {
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [trackingId, setTrackingId] = useState('');
@@ -173,6 +174,7 @@ export default function SubmitComplaint() {
         severity: aiResult.severity,
         status: 'pending',
         location: location.trim() || 'Not specified',
+        citizen_phone: phone.trim() || null,
       }).select('id').single();
 
       if (error) throw error;
@@ -358,6 +360,17 @@ export default function SubmitComplaint() {
               value={location}
               onChange={e => setLocation(e.target.value)}
               placeholder="e.g. Delhi, Yamuna River near ITO bridge"
+              className="w-full px-4 py-3 rounded-xl bg-muted/30 border border-border text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-muted-foreground">Phone Number (to receive resolution SMS)</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="e.g. +91 98765 43210"
               className="w-full px-4 py-3 rounded-xl bg-muted/30 border border-border text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all text-sm"
             />
           </div>

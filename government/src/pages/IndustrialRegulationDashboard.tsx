@@ -44,25 +44,6 @@ const IndustrialRegulationDashboard = () => {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: "Regulated Industries", value: "57", sub: "All monitored", icon: Factory, color: "text-orange-500" },
-          { title: "Compliance Rate", value: "91%", sub: "+3% this month", icon: ShieldCheck, color: "text-green-500" },
-          { title: "Active Complaints", value: "342", sub: "28 today", icon: MessageCircle, color: "text-blue-500" },
-          { title: "Violations", value: "12", sub: "This week", icon: AlertTriangle, color: "text-red-500" },
-        ].map((card) => (
-          <Card key={card.title} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground font-medium">{card.title}</span>
-                <card.icon className={`h-5 w-5 ${card.color}`} />
-              </div>
-              <div className="text-3xl font-bold text-foreground">{card.value}</div>
-              <div className="text-sm text-muted-foreground mt-1">{card.sub}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>

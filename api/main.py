@@ -268,6 +268,7 @@ async def send_aqi_alert(
         message_body = (
             f"🌍 EcoThon Alert for {city}:\n"
             f"Today's Predicted AQI: {current_aqi} ({cat['label']}).\n"
+            f"Check your dashboard: https://traffic1.onrender.com/\n"
             f"Stay safe! 😷"
         )
 
@@ -281,6 +282,34 @@ async def send_aqi_alert(
     except Exception as e:
         print(f"Error sending Twilio alert: {e}")
         raise HTTPException(500, f"Failed to send alert: {str(e)}")
+
+
+@app.post("/send-resolution-sms")
+async def send_resolution_sms(
+    phone: str = Query(..., description="Recipient phone number"),
+    complaint_id: str = Query(..., description="Complaint ID"),
+):
+    if not twilio_client:
+        raise HTTPException(503, "Twilio client not configured")
+
+    try:
+        short_id = complaint_id[:8].upper() if len(complaint_id) > 8 else complaint_id
+        message_body = (
+            f"✅ EcoPortal Update:\n"
+            f"Your complaint #{short_id} has been resolved by our officers.\n"
+            f"Thank you for helping us protect the environment! 🌍"
+        )
+
+        message = twilio_client.messages.create(
+            body=message_body,
+            from_=TWILIO_PHONE_NUMBER,
+            to=phone
+        )
+
+        return {"status": "success", "message_sid": message.sid}
+    except Exception as e:
+        print(f"Error sending resolution SMS: {e}")
+        raise HTTPException(500, f"Failed to send SMS: {str(e)}")
 
 
 @app.get("/predict")

@@ -23,20 +23,6 @@ const GenericDashboard = ({ title }: GenericDashboardProps) => {
         <p className="text-sm text-muted-foreground mt-1">{deptData.description}</p>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {deptData.stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-6">
-              <div className="text-sm text-muted-foreground font-medium mb-1">{s.label}</div>
-              <div className="text-2xl font-bold text-foreground">{s.value}</div>
-              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                <span className={`h-1.5 w-1.5 rounded-full ${deptData.color}`} />
-                {s.status}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {deptData.features.map((feature) => (
