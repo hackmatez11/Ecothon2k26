@@ -156,7 +156,7 @@ export function AppSidebar() {
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-2">
-                  {departments.map((dept) => (
+                  {departments.filter(d => d.title !== "Administration Department").map((dept) => (
                     <SidebarMenuItem key={dept.title} className="mb-2">
                       <SidebarMenuButton asChild>
                         <NavLink to={dept.path} className="group hover:bg-sidebar-accent/50 transition-colors" activeClassName="bg-sidebar-accent text-sidebar-primary font-bold shadow-sm">

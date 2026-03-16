@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, FileText, Shield } from "lucide-react";
+import { ArrowRight, Shield } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const HeroSection = () => {
@@ -33,17 +33,6 @@ const HeroSection = () => {
               <Link to="/dashboard">
                 Explore Environmental Data
                 <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground bg-primary-foreground/10 hover:bg-primary-foreground/20 text-base px-8">
-              <Link to="/complaints">
-                <FileText className="mr-2 h-5 w-5" />
-                File a Complaint
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground bg-primary-foreground/10 hover:bg-primary-foreground/20 text-base px-8">
-              <Link to="/login">
-                Government Login
               </Link>
             </Button>
           </div>

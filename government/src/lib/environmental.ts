@@ -400,6 +400,27 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
+export async function fetchIndustrialSiteCount(lat: number, lng: number, radiusM = 8000): Promise<number> {
+  const r = Math.min(radiusM, 8000);
+  // Query ways + relations with landuse=industrial (no name required)
+  const query = `[out:json][timeout:10];(way["landuse"="industrial"](around:${r},${lat},${lng});relation["landuse"="industrial"](around:${r},${lat},${lng});node["industrial"](around:${r},${lat},${lng});node["man_made"~"^(works|factory|chimney|gasometer|storage_tank)$"](around:${r},${lat},${lng}););out count;`;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      // Overpass "out count" returns a single element with tags.total
+      const total = data.elements?.[0]?.tags?.total;
+      if (total != null) return parseInt(total, 10);
+    } catch { continue; }
+  }
+  return 0;
+}
+
 export async function fetchOverpassPlaces(lat: number, lng: number, radiusM = 8000): Promise<OverpassPlace[]> {
   const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
   const cached = overpassCache.get(cacheKey);
