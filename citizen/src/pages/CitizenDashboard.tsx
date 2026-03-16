@@ -16,6 +16,7 @@ import { CityAQIAreas } from "@/components/dashboard/CityAQIAreas";
 import { SourceApportionmentCard } from "@/components/dashboard/SourceApportionmentCard";
 import SubmitComplaint from "@/pages/SubmitComplaint";
 import OilSpillDetection from "@/pages/OilSpillDetection";
+import CarbonFootprint from "@/pages/CarbonFootprint";
 
 function DashboardHome() {
   return (
@@ -63,6 +64,7 @@ export default function CitizenDashboard() {
               <Route path="actions" element={<GovernmentActions />} />
               <Route path="complaint" element={<SubmitComplaint />} />
               <Route path="oil-spill" element={<OilSpillDetection />} />
+              <Route path="carbon-footprint" element={<CarbonFootprint />} />
             </Routes>
           </main>
         </div>

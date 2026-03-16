@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Government Complaint Voice Bot</title>
+  <link rel="icon" href="data:,">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      padding: 40px 36px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .card h1 {
+      font-size: 1.4rem;
+      color: #1a3c5e;
+      margin-bottom: 8px;
+    }
+
+    .card p.subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 28px;
+    }
+
+    #startBtn {
+      background: #1a3c5e;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 32px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #startBtn:hover { background: #14304d; }
+    #startBtn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .status-box {
+      margin-top: 28px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 18px;
+      min-height: 80px;
+      display: none;
+    }
+
+    .status-box.visible { display: block; }
+
+    #botMessage {
+      font-size: 0.95rem;
+      color: #374151;
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+
+    #userTranscript {
+      font-size: 0.85rem;
+      color: #6b7280;
+      font-style: italic;
+      min-height: 20px;
+    }
+
+    .mic-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ef4444;
+      margin-right: 6px;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .listening-label {
+      font-size: 0.82rem;
+      color: #ef4444;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .listening-label.active { display: flex; }
+
+    .done-banner {
+      margin-top: 20px;
+      background: #d1fae5;
+      border: 1px solid #6ee7b7;
+      border-radius: 10px;
+      padding: 14px;
+      color: #065f46;
+      font-size: 0.95rem;
+      display: none;
+    }
+
+    .done-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Government Complaint Registration</h1>
+  <p class="subtitle">Voice-powered complaint assistant</p>
+
+  <button id="startBtn">🎙️ Start Complaint Voice Bot</button>
+
+  <div class="status-box" id="statusBox">
+    <div id="botMessage">Initialising...</div>
+    <div id="userTranscript"></div>
+    <div class="listening-label" id="listeningLabel">
+      <span class="mic-indicator"></span> Listening...
+    </div>
+  </div>
+
+  <div class="done-banner" id="doneBanner"></div>
+</div>
+
+<script>
+  const BACKEND = "http://localhost:3000";
+
+  const startBtn       = document.getElementById("startBtn");
+  const statusBox      = document.getElementById("statusBox");
+  const botMessage     = document.getElementById("botMessage");
+  const userTranscript = document.getElementById("userTranscript");
+  const listeningLabel = document.getElementById("listeningLabel");
+  const doneBanner     = document.getElementById("doneBanner");
+
+  let sessionId       = null;
+  let recognition     = null;
+  let currentCallback = null;
+  let resultReceived  = false;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // ── Request mic permission upfront ───────────────────────────────────────
+  async function requestMicPermission() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // ── Play base64 audio from ElevenLabs ────────────────────────────────────
+  function playAudio(base64, onEnd) {
+    if (!base64) { onEnd && onEnd(); return; }
+    const audio = new Audio("data:audio/mpeg;base64," + base64);
+    audio.onended = () => onEnd && onEnd();
+    audio.onerror = () => onEnd && onEnd();
+    audio.play().catch((e) => {
+      console.warn("Audio play failed:", e);
+      onEnd && onEnd();
+    });
+  }
+
+  // ── Listen for one user response ─────────────────────────────────────────
+  function listenOnce(callback) {
+    if (!SpeechRecognition) {
+      userTranscript.textContent = "Speech Recognition not supported. Use Chrome.";
+      return;
+    }
+
+    resultReceived  = false;
+    currentCallback = callback;
+
+    // Stop any existing recognition before starting a new one
+    if (recognition) {
+      try { recognition.abort(); } catch(e) {}
+      recognition = null;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang            = "en-US";
+    recognition.interimResults  = true;
+    recognition.maxAlternatives = 1;
+    recognition.continuous      = true;
+
+    let finalTranscript = "";
+    let silenceTimer    = null;
+    let stopped         = false;   // guard against double-fire
+
+    function done(text) {
+      if (stopped) return;
+      stopped         = true;
+      resultReceived  = true;
+      currentCallback = null;
+      clearTimeout(silenceTimer);
+      try { recognition.abort(); } catch(e) {}
+      listeningLabel.classList.remove("active");
+      userTranscript.textContent = "";
+      callback(text);
+    }
+
+    function resetSilenceTimer() {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (finalTranscript.trim()) done(finalTranscript.trim());
+      }, 2000);
+    }
+
+    listeningLabel.classList.add("active");
+    userTranscript.textContent = "";
+
+    recognition.onstart = () => {
+      console.log("Recognition started");
+    };
+
+    recognition.onresult = (e) => {
+      if (stopped) return;
+      finalTranscript = "";
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+      }
+      if (finalTranscript) resetSilenceTimer();
+    };
+
+    recognition.onerror = (e) => {
+      if (stopped) return;
+      console.error("Recognition error:", e.error);
+      clearTimeout(silenceTimer);
+      listeningLabel.classList.remove("active");
+
+      if (e.error === "aborted") return; // we triggered this ourselves — ignore
+
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        stopped = true;
+        currentCallback = null;
+        userTranscript.textContent = "❌ Mic access denied. Allow microphone and reload.";
+        startBtn.disabled = false;
+        startBtn.textContent = "🎙️ Start Complaint Voice Bot";
+        return;
+      }
+
+      if (e.error === "no-speech") {
+        setTimeout(() => { if (!stopped) listenOnce(callback); }, 800);
+        return;
+      }
+
+      if (e.error === "network") {
+        userTranscript.textContent = "Speech service error. Retrying...";
+        setTimeout(() => { if (!stopped) listenOnce(callback); }, 2000);
+        return;
+      }
+
+      setTimeout(() => { if (!stopped) listenOnce(callback); }, 1500);
+    };
+
+    recognition.onend = () => {
+      clearTimeout(silenceTimer);
+      listeningLabel.classList.remove("active");
+      // Only restart if we haven't got a result and weren't stopped intentionally
+      if (!stopped && !resultReceived && currentCallback) {
+        console.log("Recognition ended early — restarting...");
+        setTimeout(() => { if (!stopped) listenOnce(callback); }, 300);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("Could not start recognition:", err);
+      userTranscript.textContent = "Could not start mic. Reload and try again.";
+    }
+  }
+
+  // ── Send transcribed text to backend ─────────────────────────────────────
+  async function sendToBackend(text) {
+    const res = await fetch(`${BACKEND}/voice-input`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, text }),
+    });
+    return res.json();
+  }
+
+  // ── Main conversation loop ────────────────────────────────────────────────
+  function conversationStep(question, audioBase64) {
+    botMessage.textContent = question;
+
+    playAudio(audioBase64, () => {
+      listenOnce(async (userText) => {
+        try {
+          const data = await sendToBackend(userText);
+
+          if (data.done) {
+            botMessage.textContent = data.message;
+            playAudio(data.audioBase64, null);
+            doneBanner.textContent = "✅ " + data.message;
+            doneBanner.classList.add("visible");
+            startBtn.disabled = false;
+            startBtn.textContent = "🎙️ Start Complaint Voice Bot";
+            return;
+          }
+
+          if (data.error) {
+            botMessage.textContent = "Error: " + data.error;
+            startBtn.disabled = false;
+            return;
+          }
+
+          conversationStep(data.question, data.audioBase64);
+        } catch (err) {
+          botMessage.textContent = "Network error. Is the server running?";
+          startBtn.disabled = false;
+          startBtn.textContent = "🎙️ Start Complaint Voice Bot";
+        }
+      });
+    });
+  }
+
+  // ── Start button ──────────────────────────────────────────────────────────
+  startBtn.addEventListener("click", async () => {
+    if (!SpeechRecognition) {
+      alert("Speech Recognition is not supported. Please use Google Chrome.");
+      return;
+    }
+
+    const hasMic = await requestMicPermission();
+    if (!hasMic) {
+      statusBox.classList.add("visible");
+      botMessage.textContent = "❌ Microphone access denied. Click the 🔒 icon in the address bar, allow microphone, then reload.";
+      return;
+    }
+
+    startBtn.disabled = true;
+    startBtn.textContent = "Bot is running...";
+    doneBanner.classList.remove("visible");
+    statusBox.classList.add("visible");
+    botMessage.textContent = "Connecting...";
+    userTranscript.textContent = "";
+
+    try {
+      const res = await fetch(`${BACKEND}/start`, { method: "POST" });
+      const data = await res.json();
+      sessionId = data.sessionId;
+      conversationStep(data.question, data.audioBase64);
+    } catch (err) {
+      botMessage.textContent = "Could not connect to backend. Is the server running on port 3000?";
+      startBtn.disabled = false;
+      startBtn.textContent = "🎙️ Start Complaint Voice Bot";
+    }
+  });
+</script>
+</body>
+</html>

@@ -6,9 +6,11 @@ import { generateAndSaveResolutionPlan, ResolutionPlan } from '@/lib/resolutionP
 import {
   AlertCircle, MapPin, Clock, Mail, Loader2, Inbox,
   RefreshCw, Sparkles, ChevronDown, ChevronUp, CheckCircle2,
-  Link2, ListChecks, Timer, Wrench
+  Link2, ListChecks, Timer, Wrench, Mic, Phone
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+const VOICE_BOT_URL = 'http://localhost:3000';
 
 const DEPT_LABELS: Record<string, string> = {
   environment: 'Environment Department',
@@ -55,6 +57,15 @@ interface CitizenComplaintsProps {
   department?: string;
 }
 
+interface VoiceBotComplaint {
+  _id: string;
+  complaint: string;
+  location: string;
+  contact: string;
+  others: string;
+  createdAt: string;
+}
+
 export default function CitizenComplaints({ department }: CitizenComplaintsProps) {
   const { dept: deptParam } = useParams<{ dept: string }>();
   const deptKey = department || deptParam || 'environment';
@@ -68,6 +79,26 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
   const [generatingPlan, setGeneratingPlan] = useState<string | null>(null); // complaint id
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
   const [livePlans, setLivePlans] = useState<Record<string, ResolutionPlan>>({});
+
+  const [activeTab, setActiveTab] = useState<'supabase' | 'voice'>('supabase');
+  const [voiceComplaints, setVoiceComplaints] = useState<VoiceBotComplaint[]>([]);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const fetchVoiceComplaints = async () => {
+    setVoiceLoading(true);
+    setVoiceError(null);
+    try {
+      const res = await fetch(`${VOICE_BOT_URL}/complaints`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      setVoiceComplaints(data);
+    } catch (e: any) {
+      setVoiceError(e.message || 'Failed to load voice complaints');
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
 
   const fetchComplaints = async () => {
     setLoading(true);
@@ -88,6 +119,7 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
   };
 
   useEffect(() => { fetchComplaints(); }, [deptKey]);
+  useEffect(() => { if (activeTab === 'voice') fetchVoiceComplaints(); }, [activeTab]);
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -178,6 +210,123 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
           ))}
         </div>
       </div>
+
+      {/* Tab switcher */}
+      <div className="flex gap-2 border-b border-border pb-0">
+        <button
+          onClick={() => setActiveTab('supabase')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            activeTab === 'supabase'
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <AlertCircle className="w-4 h-4" /> Image Complaints
+        </button>
+        {deptKey === 'environment' && (
+          <button
+            onClick={() => setActiveTab('voice')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === 'voice'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Mic className="w-4 h-4" /> Voice Bot Complaints
+            {voiceComplaints.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold">
+                {voiceComplaints.length}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Voice Bot Complaints Tab */}
+      {activeTab === 'voice' && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button
+              onClick={fetchVoiceComplaints}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-background/50 border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
+
+          {voiceLoading && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+              <p className="text-sm text-muted-foreground">Loading voice complaints...</p>
+            </div>
+          )}
+
+          {voiceError && !voiceLoading && (
+            <Card className="border-destructive/40 bg-destructive/5">
+              <CardContent className="p-6 text-center">
+                <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
+                <p className="text-sm text-destructive font-medium">{voiceError}</p>
+                <p className="text-xs text-muted-foreground mt-1">Make sure the complaint bot server is running on port 3000.</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!voiceLoading && !voiceError && voiceComplaints.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
+                <Mic className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <p className="text-foreground font-medium">No voice complaints yet</p>
+              <p className="text-sm text-muted-foreground">Complaints submitted via the voice bot will appear here.</p>
+            </div>
+          )}
+
+          {!voiceLoading && voiceComplaints.length > 0 && (
+            <div className="grid gap-4">
+              {voiceComplaints.map((vc) => (
+                <Card key={vc._id} className="border-border">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                          <Mic className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded-full border border-border">
+                          #{vc._id.slice(-8).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        {new Date(vc.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-foreground leading-relaxed">{vc.complaint}</p>
+
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      {vc.location && (
+                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{vc.location}</span>
+                      )}
+                      {vc.contact && (
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{vc.contact}</span>
+                      )}
+                    </div>
+
+                    {vc.others && (
+                      <p className="text-xs text-muted-foreground italic border-t border-border/50 pt-2">
+                        <span className="font-medium not-italic text-foreground">Additional info: </span>{vc.others}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Image Complaints Tab */}
+      {activeTab === 'supabase' && (<>
 
       {loading && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -412,6 +561,7 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
           })}
         </div>
       )}
+      </>)}
 
       {/* Image Modal */}
       {selectedImage && (

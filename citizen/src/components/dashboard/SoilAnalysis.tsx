@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from "react";
 // ─── ENV KEYS ────────────────────────────────────────────────────────────────
 const ENV_GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY || "";
 const ENV_TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY || "";
+const TAVILY_AVAILABLE = !!ENV_TAVILY_KEY && ENV_TAVILY_KEY.trim().length > 0;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -176,7 +177,7 @@ export function SoilAnalysis() {
   const [locating, setLocating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const STEPS = ["parse", "groq", "tavily", "reco"];
+  const STEPS = TAVILY_AVAILABLE ? ["parse", "groq", "tavily", "reco"] : ["parse", "groq", "reco"];
   const stepState = (id: string) => {
     const myIdx = STEPS.indexOf(id);
     const curIdx = STEPS.indexOf(progressStep);
@@ -220,8 +221,11 @@ export function SoilAnalysis() {
       const fileContents = await Promise.all(files.map(readFileContent));
       await delay(500); setProgressStep("groq");
       const soilData = await callGroq(groqKey, fileContents, location);
-      await delay(400); setProgressStep("tavily");
-      const tavilyData = await callTavily(tavilyKey, location, soilData.soilType || "general");
+      let tavilyData = { answer: "", results: [] };
+      if (TAVILY_AVAILABLE) {
+        await delay(400); setProgressStep("tavily");
+        tavilyData = await callTavily(tavilyKey, location, soilData.soilType || "general");
+      }
       await delay(400); setProgressStep("reco");
       const finalData = await callGroqFinal(groqKey, soilData, tavilyData, location);
       await delay(500);
@@ -329,7 +333,7 @@ export function SoilAnalysis() {
               </div>
               <ProgressStep icon="📄" label="Reading your files" sub="Extracting soil data from uploaded documents" state={stepState("parse")} />
               <ProgressStep icon="🧠" label="Groq AI Analysis" sub="Running deep soil chemistry analysis" state={stepState("groq")} />
-              <ProgressStep icon="🌍" label="Geographic Research" sub="Searching climate, soil zones & crop suitability for your region" state={stepState("tavily")} />
+              {TAVILY_AVAILABLE && <ProgressStep icon="🌍" label="Geographic Research" sub="Searching climate, soil zones & crop suitability for your region" state={stepState("tavily")} />}
               <ProgressStep icon="🌾" label="Generating Recommendations" sub="Matching soil profile to optimal crops" state={stepState("reco")} />
             </div>
           </div>
@@ -368,18 +372,20 @@ export function SoilAnalysis() {
                   ].map((g) => g.value && <GeoTile key={g.label} label={g.label} value={g.value} />)}
                 </div>
               )}
-              <div style={{ fontSize: 14.5, lineHeight: 1.85, color: "#3a4a5a" }}>
-                <h3 style={{ fontFamily: "'Georgia', serif", fontSize: "1rem", color: "#1a2233", marginBottom: 8 }}>🌐 Regional Research</h3>
-                <p>{results.tavily.answer || "Geographic research completed."}</p>
-                {results.tavily.results.length > 0 && (
-                  <p style={{ marginTop: 12 }}>
-                    <strong>Sources: </strong>
-                    {results.tavily.results.map((r: any, i: number) => (
-                      <span key={i}>{i > 0 && " · "}<a href={r.url} target="_blank" rel="noreferrer" style={{ color: "#4a7c59", textDecoration: "none" }}>{r.title}</a></span>
-                    ))}
-                  </p>
-                )}
-              </div>
+              {TAVILY_AVAILABLE && results.tavily?.answer && (
+                <div style={{ fontSize: 14.5, lineHeight: 1.85, color: "#3a4a5a" }}>
+                  <h3 style={{ fontFamily: "'Georgia', serif", fontSize: "1rem", color: "#1a2233", marginBottom: 8 }}>🌐 Regional Research</h3>
+                  <p>{results.tavily.answer}</p>
+                  {results.tavily.results?.length > 0 && (
+                    <p style={{ marginTop: 12 }}>
+                      <strong>Sources: </strong>
+                      {results.tavily.results.map((r: any, i: number) => (
+                        <span key={i}>{i > 0 && " · "}<a href={r.url} target="_blank" rel="noreferrer" style={{ color: "#4a7c59", textDecoration: "none" }}>{r.title}</a></span>
+                      ))}
+                    </p>
+                  )}
+                </div>
+              )}
             </Section>
             <Section icon="🌾" title="Recommended Crops">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 }}>

@@ -7,6 +7,7 @@ import { AQIHeatmap } from "./AQIHeatmap";
 
 const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
 const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const TAVILY_AVAILABLE = !!TAVILY_KEY && TAVILY_KEY.trim().length > 0;
 
 export interface AreaAQI {
   area: string;
@@ -192,6 +193,8 @@ function MiniSparkline({ forecast }: { forecast: { day: string; aqi: number }[] 
 }
 
 export function CityAQIAreas() {
+  if (!TAVILY_AVAILABLE) return null;
+
   const { profile, loading: profileLoading } = useProfile();
   const [areas, setAreas] = useState<AreaAQI[]>([]);
   const [loading, setLoading] = useState(false);

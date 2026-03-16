@@ -441,21 +441,6 @@ const EnvironmentalDashboard = () => {
               </CardContent>
             </Card>
           ))}
-          
-          <Card className="cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500" onClick={() => navigate("/citizen-complaints/environment")}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-emerald-500 bg-opacity-10">
-                  <MessageCircle className="h-6 w-6 text-emerald-500" />
-                </div>
-                <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">New Reports</span>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <CardTitle className="text-base mb-1.5 text-emerald-600">Citizen Complaints</CardTitle>
-              <p className="text-xs text-muted-foreground leading-relaxed">View and respond to AI-categorized environmental complaints from citizens.</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

@@ -58,6 +58,14 @@ export const departments: Department[] = [
         color: "bg-indigo-500",
         path: "/officers/environmental",
         stats: "Manage Team"
+      },
+      {
+        title: "Citizen Complaints",
+        description: "View and respond to AI-categorized environmental complaints from citizens",
+        icon: MessageCircle,
+        color: "bg-green-500",
+        path: "/citizen-complaints/environment",
+        stats: "Active issues"
       }
     ]
   },
