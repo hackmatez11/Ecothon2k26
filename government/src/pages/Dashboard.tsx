@@ -1,40 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wind, MessageCircle, Users, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
 
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  const overallStats = [
-    { title: "Overall AQI", value: "185", sub: "Unhealthy", icon: Wind, color: "text-destructive" },
-    { title: "Total Complaints", value: "342", sub: "+28 today", icon: MessageCircle, color: "text-info" },
-    { title: "Active Personnel", value: "156", sub: "Across all depts", icon: Users, color: "text-primary" },
-    { title: "System Efficiency", value: "87%", sub: "+5% this month", icon: CheckCircle, color: "text-success" },
-  ];
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">NEMAP Government Dashboard</h1>
-        <div className="text-sm text-muted-foreground">National Environmental Management Authority | Pakistan</div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {overallStats.map((card) => (
-          <Card key={card.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">{card.title}</span>
-                <card.icon className={`h-5 w-5 ${card.color}`} />
-              </div>
-              <div className="text-3xl font-bold text-foreground">{card.value}</div>
-              <div className="text-sm text-muted-foreground mt-1">{card.sub}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <div>
         <h2 className="text-xl font-semibold mb-4">Department Dashboards</h2>
         <div className="grid md:grid-cols-2 gap-6">

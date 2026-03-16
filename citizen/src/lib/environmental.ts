@@ -62,6 +62,24 @@ export interface ForecastResponse {
   generated_at: string;
 }
 
+export interface SourceData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+export interface SourceAttributionResponse {
+  lat: number;
+  lng: number;
+  sources: SourceData[];
+  metrics: {
+    traffic_congestion_multiplier: number;
+    osm_industrial_nodes: number;
+    osm_construction_nodes: number;
+  };
+  generated_at: string;
+}
+
 // Point to your local FastAPI server (update for production)
 const SENTINEL_API_URL = import.meta.env.VITE_SENTINEL_API_URL || 'http://localhost:8000';
 
@@ -108,6 +126,23 @@ export async function resolveCityCoords(city: string): Promise<[number, number] 
     }
   } catch {
     // silently fall through
+  }
+  return null;
+}
+
+export async function fetchSourceAttribution(city: string): Promise<SourceAttributionResponse | null> {
+  try {
+    const coords = await resolveCityCoords(city);
+    if (!coords) return null;
+    
+    const [lat, lng] = coords;
+    const url = `${SENTINEL_API_URL}/source-attribution?lat=${lat}&lng=${lng}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Source attribution fetch failed:', err);
   }
   return null;
 }

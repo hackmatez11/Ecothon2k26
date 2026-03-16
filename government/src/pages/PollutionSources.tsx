@@ -1,88 +1,208 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Plus } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Plus, Loader2, MapPin, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { fetchSourceAttribution, fetchControlPlan, SourceAttributionResponse, ControlPlanItem } from "@/lib/environmental";
 
-const sourceData = [
-  { name: "Vehicles", value: 35, color: "#3b82f6" },
-  { name: "Factories", value: 28, color: "#ef4444" },
-  { name: "Construction", value: 18, color: "#f59e0b" },
-  { name: "Garbage Burning", value: 12, color: "#8b5cf6" },
-  { name: "Other", value: 7, color: "#6b7280" },
-];
 
-const cityData = [
-  { city: "Delhi", vehicles: 40, factories: 25, construction: 20, burning: 15 },
-  { city: "Mumbai", vehicles: 35, factories: 30, construction: 15, burning: 20 },
-  { city: "Kolkata", vehicles: 30, factories: 35, construction: 20, burning: 15 },
-  { city: "Chennai", vehicles: 25, factories: 20, construction: 30, burning: 25 },
-];
-
-const actions = [
-  { source: "Vehicles", action: "Implement odd-even traffic restrictions", status: "Proposed" },
-  { source: "Factories", action: "Schedule factory inspection drive", status: "Active" },
-  { source: "Construction", action: "Enforce dust control measures", status: "Active" },
-  { source: "Garbage Burning", action: "Deploy waste collection teams", status: "Proposed" },
-];
+const COMPARISON_CITIES = ["Delhi", "Mumbai", "Kolkata", "Chennai"];
 
 const PollutionSources = () => {
+  const [city, setCity] = useState("Delhi");
+  const [searchInput, setSearchInput] = useState("Delhi");
+  const [sourceData, setSourceData] = useState<SourceAttributionResponse | null>(null);
+  const [cityData, setCityData] = useState<any[] | null>(null);
+  const [actions, setActions] = useState<ControlPlanItem[] | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      setSourceData(null);
+      setCityData(null);
+      setActions(null);
+      
+      // Load current city pie chart data
+      const data = await fetchSourceAttribution(city);
+      setSourceData(data);
+      if (data && data.sources) {
+        // Load AI generated control plans
+        const planData = await fetchControlPlan(city, data.sources);
+        setActions(planData);
+      }
+
+      // Load comparison bar chart data for multiple cities concurrently
+      const comparisonPromises = COMPARISON_CITIES.map(c => fetchSourceAttribution(c));
+      const comparisonResults = await Promise.all(comparisonPromises);
+      
+      const mappedCityData = comparisonResults.map((res, index) => {
+        if (!res) return null;
+        return {
+          city: COMPARISON_CITIES[index],
+          vehicles: res.sources.find(s => s.name === "Vehicular Traffic")?.value || 0,
+          factories: res.sources.find(s => s.name === "Industrial Emissions")?.value || 0,
+          construction: res.sources.find(s => s.name === "Dust & Construction")?.value || 0,
+          burning: res.sources.find(s => s.name === "Waste Burning")?.value || 0,
+        };
+      }).filter(Boolean);
+      
+      setCityData(mappedCityData);
+    }
+    loadData();
+  }, [city]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchInput.trim()) {
+      setCity(searchInput.trim());
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Pollution Source Analysis</h1>
-        <Button><Plus className="mr-2 h-4 w-4" /> Create Control Plan</Button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Pollution Source Analysis</h1>
+          <p className="text-sm text-muted-foreground mt-1">Detailed breakdown for {city}</p>
+        </div>
+        <div className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative">
+              <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                className="pl-9 w-48" 
+                placeholder="Enter city..." 
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+            <Button type="submit" variant="outline" className="flex items-center gap-1">
+              <Search className="h-4 w-4" />
+              Analyze City
+            </Button>
+          </form>
+          <Button><Plus className="mr-2 h-4 w-4" /> Create Control Plan</Button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle>Source Distribution</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={sourceData} cx="50%" cy="50%" outerRadius={110} dataKey="value" label={({ name, value }) => `${name}: ${value}%`}>
-                  {sourceData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardHeader className="py-4 border-b bg-muted/30">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-bold">Source Distribution</CardTitle>
+              {sourceData && (
+                 <Badge variant="outline" className="text-[10px] uppercase">
+                   LIVE ANALYSIS
+                 </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {!sourceData ? (
+               <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground">
+                 <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                 <p className="text-sm">Analyzing Local Source Apportionment...</p>
+                 <p className="text-xs opacity-70 mt-2 text-center max-w-[200px]">Querying OpenStreetMap landuse & TomTom traffic</p>
+               </div>
+            ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={sourceData.sources} cx="50%" cy="50%" innerRadius={70} outerRadius={100} dataKey="value" paddingAngle={4}>
+                        {sourceData.sources.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        formatter={(value) => [`${value}%`, 'Contribution']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-3 mt-6">
+                    {sourceData.sources.map((s) => (
+                      <div key={s.name} className="flex items-center justify-between text-sm group cursor-help">
+                        <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 rounded-full shadow-sm" style={{ background: s.color }} />
+                          <span className="text-muted-foreground font-medium group-hover:text-foreground transition-colors">{s.name}</span>
+                        </div>
+                        <span className="font-bold text-foreground text-base">{s.value}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>City-wise Breakdown</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={cityData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="city" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Bar dataKey="vehicles" fill="#3b82f6" name="Vehicles" stackId="a" />
-                <Bar dataKey="factories" fill="#ef4444" name="Factories" stackId="a" />
-                <Bar dataKey="construction" fill="#f59e0b" name="Construction" stackId="a" />
-                <Bar dataKey="burning" fill="#8b5cf6" name="Burning" stackId="a" />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardHeader className="py-4 border-b bg-muted/30">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-bold">City-wise Breakdown</CardTitle>
+              {cityData && (
+                 <Badge variant="outline" className="text-[10px] uppercase">
+                   LIVE ANALYSIS
+                 </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {!cityData ? (
+               <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                 <Loader2 className="h-8 w-8 animate-spin mb-4" />
+                 <p className="text-sm">Fetching Inter-city Apportionment Data...</p>
+               </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={cityData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="city" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <RechartsTooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                  <Bar dataKey="vehicles" fill="#ef4444" name="Vehicles" stackId="a" />
+                  <Bar dataKey="factories" fill="#f97316" name="Factories" stackId="a" />
+                  <Bar dataKey="construction" fill="#eab308" name="Construction" stackId="a" />
+                  <Bar dataKey="burning" fill="#8b5cf6" name="Burning" stackId="a" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Control Plans</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {actions.map((a, i) => (
-              <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-border">
-                <div>
-                  <p className="font-medium text-foreground">{a.action}</p>
-                  <p className="text-sm text-muted-foreground">Source: {a.source}</p>
-                </div>
-                <span className={`gov-badge ${a.status === "Active" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
-                  {a.status}
-                </span>
-              </div>
-            ))}
+        <CardHeader className="py-4 border-b bg-muted/30">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-bold">Recommended Control Plans</CardTitle>
           </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {!actions ? (
+            <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+               <Loader2 className="h-8 w-8 animate-spin mb-4" />
+               <p className="text-sm">Analyzing pollution source data...</p>
+               <p className="text-xs opacity-70 mt-2 text-center max-w-[250px]">Generating optimal mitigation strategies based on Live Data</p>
+            </div>
+          ) : actions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+               <p className="text-sm">Action generation failed. Please try again later.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {actions.map((a, i) => (
+                <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-border">
+                  <div>
+                    <p className="font-medium text-foreground">{a.action}</p>
+                    <p className="text-sm text-muted-foreground">Targeting Source: <span className="font-semibold">{a.source}</span></p>
+                  </div>
+                  <span className={`gov-badge shrink-0 ms-4 ${a.status === "Active" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
+                    {a.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

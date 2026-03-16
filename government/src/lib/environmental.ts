@@ -116,7 +116,28 @@ export async function fetchSourceAttribution(city: string): Promise<SourceAttrib
   return null;
 }
 
+export interface ControlPlanItem {
+  source: string;
+  action: string;
+  status: 'Proposed' | 'Active';
+}
 
+export async function fetchControlPlan(city: string, sources: SourceData[]): Promise<ControlPlanItem[] | null> {
+  try {
+    const url = `${SENTINEL_API_URL}/generate-control-plan`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ city, sources })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Control plan generation failed:', err);
+  }
+  return null;
+}
 
 /**
  * Resolve coordinates for a city name.

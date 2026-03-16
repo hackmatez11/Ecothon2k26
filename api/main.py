@@ -14,11 +14,15 @@ from dotenv import load_dotenv
 import os
 from twilio.rest import Client
 from typing import List, Tuple, cast
+from typing import List, Tuple, cast
+from pydantic import BaseModel
+import json
 
 load_dotenv()
 
 # API Keys
 TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY", "")
+GEMINI_PLAN_KEY = os.getenv("GEMINI_PLAN_KEY", "")
 
 # Twilio Configuration
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -921,7 +925,6 @@ async def detect_kilns(
             map_html = m._repr_html_()
         except ImportError:
             map_html = None
-
     return {
         "kiln_count":       len(kilns),
         "predicted_aqi":    round(max(0.0, predicted_aqi), 2),
@@ -930,3 +933,60 @@ async def detect_kilns(
         "map_html":         map_html,
         "generated_at":     datetime.utcnow().isoformat() + "Z",
     }
+
+
+class SourceItem(BaseModel):
+    name: str
+    value: float
+    color: str
+
+class ControlPlanRequest(BaseModel):
+    city: str
+    sources: List[SourceItem]
+
+@app.post("/generate-control-plan")
+async def generate_control_plan(req: ControlPlanRequest):
+    if not GEMINI_PLAN_KEY:
+        print("Warning: GEMINI_PLAN_KEY is not set.")
+        return []
+
+    prompt = f"Given the following pollution source breakdown for {req.city}:\n"
+    for s in req.sources:
+        prompt += f"- {s.name}: {s.value}%\n"
+    
+    prompt += """
+Generate exactly 4 specific, highly actionable, and modern government control plans to mitigate the highest contributing sources here.
+Format the output EXACTLY as a raw JSON array of objects without any markdown formatting or codeblocks. Each object must have these exactly 3 keys:
+- "source": The exact name of the pollution source this targets (e.g. "Vehicular Traffic", "Industrial Emissions", "Dust & Construction", "Waste Burning").
+- "action": The specific government action plan. Must be a clear directive.
+- "status": Either "Proposed" or "Active". (Use Proposed for new aggressive interventions or Active for immediate ongoing enforcement).
+Do not include any other text, prefix, or suffix. Just the JSON array.
+"""
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_PLAN_KEY}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.3}
+                },
+                timeout=15.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            
+            # Remove any markdown formatting Gemini might have forcibly prepended
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            
+            plans = json.loads(text.strip())
+            return plans
+        except Exception as e:
+            print("Gemini API Error:", e)
+            return []
