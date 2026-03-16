@@ -36,14 +36,6 @@ export const departments: Department[] = [
     ],
     features: [
       {
-        title: "Pollution Prediction",
-        description: "AI-powered pollution forecasting and trend analysis",
-        icon: Brain,
-        color: "bg-blue-500",
-        path: "/pollution-prediction",
-        stats: "95% Accuracy"
-      },
-      {
         title: "Pollution Sources",
         description: "Track and analyze pollution source contributions",
         icon: PieChart,
@@ -58,14 +50,6 @@ export const departments: Department[] = [
         color: "bg-red-500",
         path: "/industrial-detection",
         stats: "AI Powered"
-      },
-      {
-        title: "Oil Spill Detection",
-        description: "Detect oil spills using Sentinel-1 SAR satellite imagery",
-        icon: Ship,
-        color: "bg-orange-500",
-        path: "/oil-spill-detection",
-        stats: "SAR · CDSE"
       },
       {
         title: "Officer Management",
@@ -90,20 +74,12 @@ export const departments: Department[] = [
     ],
     features: [
       {
-        title: "Water Quality",
-        description: "Real-time water quality monitoring and analysis",
-        icon: Droplets,
+        title: "Citizen Complaints",
+        description: "Handle water-related pollution and quality complaints",
+        icon: MessageCircle,
         color: "bg-blue-500",
-        path: "/water-quality",
-        stats: "78% Quality"
-      },
-      {
-        title: "Oil Spill Detection",
-        description: "Detect and respond to oil spill incidents",
-        icon: Ship,
-        color: "bg-red-500",
-        path: "/oil-spill",
-        stats: "32 Detected"
+        path: "/citizen-complaints/water",
+        stats: "Active issues"
       },
       {
         title: "Water Analysis",
@@ -112,6 +88,14 @@ export const departments: Department[] = [
         color: "bg-indigo-500",
         path: "/water-analysis",
         stats: "Instant Analysis"
+      },
+      {
+        title: "Oil Spill Detection",
+        description: "Detect oil spills using Sentinel-1 SAR satellite imagery",
+        icon: Ship,
+        color: "bg-orange-500",
+        path: "/oil-spill-detection",
+        stats: "SAR · CDSE"
       },
       {
         title: "Officer Management",
@@ -136,28 +120,12 @@ export const departments: Department[] = [
     ],
     features: [
       {
-        title: "Industrial Pollution",
-        description: "Monitor and regulate industrial pollution sources",
-        icon: Factory,
-        color: "bg-orange-500",
-        path: "/industrial-pollution",
-        stats: "57 Industries"
-      },
-      {
         title: "Complaints",
         description: "Manage and track pollution complaints",
         icon: MessageCircle,
         color: "bg-blue-500",
         path: "/citizen-complaints/pollution",
         stats: "342 Active"
-      },
-      {
-        title: "Voice Complaint",
-        description: "Voice-based complaint registration system",
-        icon: Mic,
-        color: "bg-green-500",
-        path: "/voice-complaint",
-        stats: "89 Today"
       },
       {
         title: "Officer Management",

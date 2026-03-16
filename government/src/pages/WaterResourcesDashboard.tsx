@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Droplets, Ship, Waves, AlertTriangle, Activity, MessageCircle } from "lucide-react";
+import { Droplets, Ship, AlertTriangle, Activity, MessageCircle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
@@ -39,14 +39,6 @@ const WaterResourcesDashboard = () => {
             {deptData.title}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NEMAP Water Quality & Resource Management</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
-            Deploy Water Sensors
-          </button>
-          <button className="px-4 py-2 bg-white text-blue-600 border border-blue-200 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors shadow-sm">
-            Reservoir Analysis
-          </button>
         </div>
       </div>
 
@@ -130,19 +122,6 @@ const WaterResourcesDashboard = () => {
         </div>
       </div>
 
-      <Card className="overflow-hidden border-blue-500/20">
-        <CardHeader className="bg-blue-500/5"><CardTitle className="text-lg">Interactive Watershed Map</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <div className="aspect-[16/6] bg-accent/30 flex items-center justify-center relative">
-            <div className="text-center text-muted-foreground z-10">
-              <Waves className="h-10 w-10 mx-auto mb-2 text-blue-400 opacity-60 animate-pulse" />
-              <p className="font-medium">Real-time watershed monitoring network</p>
-              <p className="text-xs mt-1">Satellite data integration active</p>
-            </div>
-            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_70%)]" />
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

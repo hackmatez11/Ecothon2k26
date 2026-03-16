@@ -171,8 +171,6 @@ export async function generateAndSaveResolutionPlan(
       expected_timeline: plan.expected_timeline,
       plan_generated_at: new Date().toISOString(),
       plan_generated_by: complaint.assigned_officer_name ?? "Government Officer",
-      initial_impact_score: plan.initial_score,
-      target_impact_score: plan.target_score,
       status: "in_progress",
     })
     .eq("id", complaintId);

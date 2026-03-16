@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, MessageCircle, AlertTriangle, CheckCircle, ShieldCheck, Zap, Gavel, Search } from "lucide-react";
+import { Factory, MessageCircle, AlertTriangle, CheckCircle, ShieldCheck, Zap } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
@@ -33,14 +33,6 @@ const IndustrialRegulationDashboard = () => {
             {deptData.title}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NEMAP Regulatory Compliance & Enforcement Division</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors shadow-sm flex items-center gap-2">
-            <Search className="h-4 w-4" /> Schedule Inspection
-          </button>
-          <button className="px-4 py-2 bg-white text-orange-600 border border-orange-200 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors shadow-sm flex items-center gap-2">
-            <Gavel className="h-4 w-4" /> Issue Citation
-          </button>
         </div>
       </div>
 
@@ -119,44 +111,6 @@ const IndustrialRegulationDashboard = () => {
         </div>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-lg">Critical Enforcement Actions</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[
-              { company: "ABC Manufacturing", action: "Notice Issued", date: "2 hours ago", status: "pending", priority: "high" },
-              { company: "XYZ Chemicals", action: "Fine Imposed", date: "5 hours ago", status: "completed", priority: "critical" },
-              { company: "PQR Industries", action: "Inspection Scheduled", date: "1 day ago", status: "scheduled", priority: "low" },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border group hover:border-primary/30 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                    item.priority === 'critical' ? 'bg-red-100' : 'bg-muted'
-                  }`}>
-                    <Factory className={`h-5 w-5 ${
-                      item.priority === 'critical' ? 'text-red-600' : 'text-muted-foreground'
-                    }`} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-foreground">{item.company}</p>
-                    <p className="text-sm text-muted-foreground">{item.action}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground font-medium mb-1">{item.date}</p>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
-                    item.status === 'completed' ? 'bg-green-100 text-green-700' :
-                    item.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-blue-100 text-blue-700'
-                  }`}>
-                    {item.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
