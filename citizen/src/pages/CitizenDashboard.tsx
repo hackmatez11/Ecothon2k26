@@ -29,9 +29,6 @@ function DashboardHome() {
       <EnvironmentalAlerts />
       <PollutionPrediction />
       <GovernmentActions />
-      <EnvironmentalAlerts />
-      <PollutionPrediction />
-      <GovernmentActions />
     </div>
   );
 }

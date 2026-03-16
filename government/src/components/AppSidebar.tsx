@@ -155,9 +155,9 @@ export function AppSidebar() {
                 Functional Nodes
               </SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-2">
                   {departments.map((dept) => (
-                    <SidebarMenuItem key={dept.title}>
+                    <SidebarMenuItem key={dept.title} className="mb-2">
                       <SidebarMenuButton asChild>
                         <NavLink to={dept.path} className="group hover:bg-sidebar-accent/50 transition-colors" activeClassName="bg-sidebar-accent text-sidebar-primary font-bold shadow-sm">
                           <div className={`mr-2 p-1 rounded-md ${dept.color} bg-opacity-10 group-hover:bg-opacity-20 transition-all`}>
