@@ -25,6 +25,7 @@ load_dotenv()
 # API Keys
 TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY", "")
 GEMINI_PLAN_KEY = os.getenv("GEMINI_PLAN_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # Twilio Configuration
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -948,9 +949,10 @@ class ControlPlanRequest(BaseModel):
 
 @app.post("/generate-control-plan")
 async def generate_control_plan(req: ControlPlanRequest):
-    if not GEMINI_PLAN_KEY:
-        print("Warning: GEMINI_PLAN_KEY is not set.")
-        return []
+    if not GROQ_API_KEY:
+        print("Warning: GROQ_API_KEY is not set. Falling back to Gemini if available.")
+        if not GEMINI_PLAN_KEY:
+            return []
 
     prompt = f"Given the following pollution source breakdown for {req.city}:\n"
     for s in req.sources:
@@ -967,28 +969,60 @@ Do not include any other text, prefix, or suffix. Just the JSON array.
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_PLAN_KEY}",
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.3}
-                },
-                timeout=15.0
-            )
-            response.raise_for_status()
-            data = response.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if GROQ_API_KEY:
+                # Use Groq API (OpenAI Compatible)
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "system", "content": "You are a government environmental policy expert. Respond only with raw JSON code."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3,
+                        "response_format": {"type": "json_object"} if "llama-3" in "llama-3.3-70b-versatile" else None
+                    },
+                    timeout=15.0
+                )
+                response.raise_for_status()
+                data = response.json()
+                text = data["choices"][0]["message"]["content"].strip()
+            else:
+                # Fallback to Gemini
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_PLAN_KEY}",
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.3}
+                    },
+                    timeout=15.0
+                )
+                response.raise_for_status()
+                data = response.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
             
-            # Remove any markdown formatting Gemini might have forcibly prepended
+            print(f"AI Plan Response: {text[:200]}...")
+            
+            # Remove any markdown formatting AI might have prepended
             if text.startswith("```json"):
                 text = text[7:]
-            if text.startswith("```"):
+            elif text.startswith("```"):
                 text = text[3:]
+            
             if text.endswith("```"):
                 text = text[:-3]
             
-            plans = json.loads(text.strip())
-            return plans
+            # Handle possible root "plans" key if LLM wraps it
+            parsed = json.loads(text.strip())
+            if isinstance(parsed, dict) and "plans" in parsed:
+                return parsed["plans"]
+            return parsed
         except Exception as e:
-            print("Gemini API Error:", e)
+            print("AI Generation Error:", e)
+            if 'response' in locals() and response:
+                print("Response data:", response.text[:500])
             return []

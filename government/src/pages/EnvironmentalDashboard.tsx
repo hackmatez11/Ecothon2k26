@@ -1,9 +1,21 @@
-import { Leaf, Brain, Mountain, Wind, TrendingUp, AlertTriangle, MessageCircle, MapPin, Loader2, Search, Satellite } from "lucide-react";
+import { Leaf, Brain, Mountain, Wind, TrendingUp, AlertTriangle, MessageCircle, MapPin, Loader2, Search, Satellite, ShieldAlert } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
 import { useState, useEffect } from "react";
-import { fetchAQIData, AQIData, getAQIColor, fetchPredictionData, PredictionResponse, fetchSourceAttribution, SourceAttributionResponse } from "@/lib/environmental";
+import { 
+  fetchAQIData, 
+  AQIData, 
+  getAQIColor, 
+  fetchPredictionData, 
+  PredictionResponse, 
+  fetchSourceAttribution, 
+  SourceAttributionResponse,
+  fetchOpenAQReadings,
+  fetchOverpassPlaces,
+  resolveCityCoords
+} from "@/lib/environmental";
+import { supabase, Complaint } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,24 +36,88 @@ const EnvironmentalDashboard = () => {
   const [aqiData, setAqiData] = useState<AQIData | null>(null);
   const [predictionData, setPredictionData] = useState<PredictionResponse | null>(null);
   const [sourceData, setSourceData] = useState<SourceAttributionResponse | null>(null);
+  const [siteCounts, setSiteCounts] = useState({ openaq: 0, osm: 0 });
+  const [latestComplaint, setLatestComplaint] = useState<Complaint | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("Delhi");
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [data, pred, source] = await Promise.all([
-        fetchAQIData(city),
-        fetchPredictionData(city),
-        fetchSourceAttribution(city)
-      ]);
-      setAqiData(data);
-      setPredictionData(pred);
-      setSourceData(source);
-      setLoading(false);
+      try {
+        const coords = await resolveCityCoords(city);
+        const lat = coords?.[0] || 28.6139;
+        const lng = coords?.[1] || 77.2090;
+
+        const [data, pred, source, openaqSites, osmSites, complaintData] = await Promise.all([
+          fetchAQIData(city),
+          fetchPredictionData(city),
+          fetchSourceAttribution(city),
+          fetchOpenAQReadings(lat, lng),
+          fetchOverpassPlaces(lat, lng),
+          supabase
+            .from('complaints')
+            .select('*')
+            .eq('department', 'environment')
+            .order('created_at', { ascending: false })
+            .limit(1)
+        ]);
+        
+        setAqiData(data);
+        setPredictionData(pred);
+        setSourceData(source);
+        setSiteCounts({ openaq: openaqSites.length, osm: osmSites.length });
+        setLatestComplaint(complaintData.data?.[0] || null);
+      } catch (err) {
+        console.error("Dashboard load failed:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
   }, [city]);
+
+  const generateAlerts = () => {
+    const alerts = [];
+    
+    // 1. Current AQI Rule
+    if (aqiData && aqiData.aqi > 150) {
+      alerts.push({
+        title: "High Pollution Alert",
+        type: "danger",
+        desc: `Current AQI is ${aqiData.aqi} (${aqiData.category}). Issue immediate smog warnings.`
+      });
+    }
+
+    // 2. Future AQI Forecast Rule
+    if (predictionData && predictionData.forecast) {
+      const hazardousDay = predictionData.forecast.slice(0, 3).find(d => d.aqi > 200);
+      if (hazardousDay) {
+        alerts.push({
+          title: "Critical AQI Forecast",
+          type: "warning",
+          desc: `AQI predicted to reach ${Math.round(hazardousDay.aqi)} on ${hazardousDay.day}. Prepare mitigation plans.`
+        });
+      }
+    }
+
+    // 3. Latest Complaint Rule (from user request)
+    if (latestComplaint) {
+      const complaintDate = new Date(latestComplaint.created_at);
+      const isRecent = (Date.now() - complaintDate.getTime()) < 24 * 60 * 60 * 1000;
+      if (isRecent) {
+        alerts.push({
+          title: "New Citizen Report",
+          type: "info",
+          desc: `Latest issue: "${latestComplaint.description.slice(0, 50)}..." [${latestComplaint.severity} Priority]`
+        });
+      }
+    }
+
+    return alerts;
+  };
+
+  const activeAlerts = generateAlerts();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,8 +175,20 @@ const EnvironmentalDashboard = () => {
             icon: TrendingUp, 
             color: "text-warning" 
           },
-          { title: "Active Alerts", value: "12", sub: "High priority", icon: AlertTriangle, color: "text-info" },
-          { title: "Monitoring Sites", value: "89", sub: "All active", icon: Mountain, color: "text-primary" },
+          { 
+            title: "Active Alerts", 
+            value: activeAlerts.length.toString(), 
+            sub: activeAlerts.length > 0 ? activeAlerts[0].title : "Systems normal", 
+            icon: AlertTriangle, 
+            color: activeAlerts.length > 0 ? "text-red-500" : "text-green-500" 
+          },
+          { 
+            title: "Monitoring Sites", 
+            value: (siteCounts.openaq + siteCounts.osm).toString(), 
+            sub: `${siteCounts.openaq} OpenAQ • ${siteCounts.osm} OSM`, 
+            icon: Mountain, 
+            color: "text-primary" 
+          },
         ].map((card) => (
           <Card key={card.title} className="hover:shadow-md transition-shadow">
             <CardContent className="p-6">
@@ -298,6 +386,39 @@ const EnvironmentalDashboard = () => {
         </Card>
       </div>
 
+
+      {activeAlerts.length > 0 && (
+        <div className="space-y-4 mb-8">
+          <div className="flex items-center gap-2 px-1">
+            <ShieldAlert className="h-5 w-5 text-red-500" />
+            <h2 className="text-xl font-bold tracking-tight">Active Environmental Incidents</h2>
+          </div>
+          <div className="grid gap-3">
+            {activeAlerts.map((alert, i) => (
+              <div 
+                key={i} 
+                className={`flex items-start gap-4 p-5 rounded-xl border shadow-sm transition-all hover:shadow-md ${
+                  alert.type === 'danger' 
+                    ? 'bg-red-500/5 border-red-500/20 text-red-900' 
+                    : alert.type === 'warning'
+                    ? 'bg-amber-500/5 border-amber-500/20 text-amber-900'
+                    : 'bg-blue-500/5 border-blue-500/20 text-blue-900'
+                }`}
+              >
+                <div className={`p-2.5 rounded-lg ${
+                  alert.type === 'danger' ? 'bg-red-500/10' : alert.type === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
+                }`}>
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold uppercase tracking-wider mb-1">{alert.title}</h3>
+                  <p className="text-sm opacity-90 leading-relaxed font-medium">{alert.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-4">
