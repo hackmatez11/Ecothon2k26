@@ -138,7 +138,7 @@
 </div>
 
 <script>
-  const BACKEND = "http://localhost:3000";
+  const BACKEND = window.location.origin; // works both locally and on Render
 
   const startBtn       = document.getElementById("startBtn");
   const statusBox      = document.getElementById("statusBox");
