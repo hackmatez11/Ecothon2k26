@@ -151,19 +151,25 @@
   let recognition     = null;
   let currentCallback = null;
   let resultReceived  = false;
+  let micPermission   = null; // cached: true | false | null (pending)
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  // ── Request mic permission upfront ───────────────────────────────────────
+  // ── Request mic permission once on page load ──────────────────────────────
   async function requestMicPermission() {
+    if (micPermission !== null) return micPermission;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => t.stop());
-      return true;
+      micPermission = true;
     } catch (err) {
-      return false;
+      micPermission = false;
     }
+    return micPermission;
   }
+
+  // Request permission immediately on page load so the browser only asks once
+  requestMicPermission();
 
   // ── Play base64 audio from ElevenLabs ────────────────────────────────────
   function playAudio(base64, onEnd) {
@@ -339,7 +345,7 @@
       return;
     }
 
-    const hasMic = await requestMicPermission();
+    const hasMic = await requestMicPermission(); // returns cached result
     if (!hasMic) {
       statusBox.classList.add("visible");
       botMessage.textContent = "❌ Microphone access denied. Click the 🔒 icon in the address bar, allow microphone, then reload.";
