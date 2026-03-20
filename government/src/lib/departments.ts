@@ -1,7 +1,7 @@
 import { 
   Leaf, Droplets, Factory, ClipboardList, 
   Brain, PieChart, Mountain, Ship, 
-  MessageCircle, Mic, MessageSquare, Wallet, MapPin, Users, Trees, Trash2, ScanSearch
+  MessageCircle, Mic, MessageSquare, Wallet, MapPin, Users, Trees, Trash2, ScanSearch, HeartPulse, Building2
 } from "lucide-react";
 export interface Feature {
   title: string;
@@ -285,6 +285,44 @@ export const departments: Department[] = [
         icon: Users,
         color: "bg-emerald-600",
         path: "/officers/forest",
+        stats: "Manage Team"
+      }
+    ]
+  },
+  {
+    title: "HealthCare Department",
+    description: "Monitor public health, disease outbreaks, and environmental health impacts",
+    icon: HeartPulse,
+    color: "bg-rose-500",
+    path: "/healthcare",
+    stats: [
+      { label: "Health Index", value: "76%", status: "Moderate" },
+      { label: "Active Outbreaks", value: "2", status: "Under control" },
+      { label: "Medical Facilities", value: "312", status: "Operational" }
+    ],
+    features: [
+      {
+        title: "Citizen Complaints",
+        description: "Handle health-related environmental complaints from citizens",
+        icon: MessageCircle,
+        color: "bg-rose-500",
+        path: "/citizen-complaints/healthcare",
+        stats: "Active issues"
+      },
+      {
+        title: "Hospital Management",
+        description: "Manage hospitals, patient records, and medical facility operations",
+        icon: Building2,
+        color: "bg-pink-500",
+        path: "/hospital-management",
+        stats: "312 Facilities"
+      },
+      {
+        title: "Officer Management",
+        description: "Manage healthcare department officers and their responsibilities",
+        icon: Users,
+        color: "bg-rose-600",
+        path: "/officers/healthcare",
         stats: "Manage Team"
       }
     ]

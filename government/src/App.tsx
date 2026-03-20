@@ -15,7 +15,8 @@ import {
   AgriculturalDashboard, 
   WasteDashboard, 
   ForestDashboard, 
-  SoilConservationDashboard 
+  SoilConservationDashboard,
+  HealthCareDashboard
 } from "./pages/NewDashboards";
 import CitizenComplaints from "./pages/CitizenComplaints";
 import PollutionPrediction from "./pages/PollutionPrediction";
@@ -43,6 +44,8 @@ import AgriculturalOfficers from "./pages/officers/AgriculturalOfficers";
 import WasteOfficers from "./pages/officers/WasteOfficers";
 import ForestOfficers from "./pages/officers/ForestOfficers";
 import SoilConservationOfficers from "./pages/officers/SoilConservationOfficers";
+import HealthCareOfficers from "./pages/officers/HealthCareOfficers";
+import HospitalManagement from "./pages/HospitalManagement";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +69,8 @@ const App = () => (
             <Route path="/waste" element={<WasteDashboard />} />
             <Route path="/forest" element={<ForestDashboard />} />
             <Route path="/soil-conservation" element={<SoilConservationDashboard />} />
+            <Route path="/healthcare" element={<HealthCareDashboard />} />
+            <Route path="/hospital-management" element={<HospitalManagement />} />
             
             <Route path="/citizen-complaints/:dept" element={<CitizenComplaints />} />
             
@@ -94,6 +99,7 @@ const App = () => (
             <Route path="/officers/waste" element={<WasteOfficers />} />
             <Route path="/officers/forest" element={<ForestOfficers />} />
             <Route path="/officers/soil-conservation" element={<SoilConservationOfficers />} />
+            <Route path="/officers/healthcare" element={<HealthCareOfficers />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

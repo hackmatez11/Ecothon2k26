@@ -57,3 +57,4 @@ export const AgriculturalDashboard = () => <GenericDashboard title="Agricultural
 export const WasteDashboard = () => <GenericDashboard title="Waste Department" />;
 export const ForestDashboard = () => <GenericDashboard title="Forest Department" />;
 export const SoilConservationDashboard = () => <GenericDashboard title="Soil Conservation Department" />;
+export const HealthCareDashboard = () => <GenericDashboard title="HealthCare Department" />;

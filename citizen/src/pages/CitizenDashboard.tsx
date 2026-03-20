@@ -1,5 +1,6 @@
-import { Routes, Route } from "react-router-dom";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Routes, Route, useLocation } from "react-router-dom";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { useEffect } from "react";
 import { CitizenSidebar } from "@/components/CitizenSidebar";
 import { WelcomeHeader } from "@/components/dashboard/WelcomeHeader";
 import { LiveEnvironmentalMap } from "@/components/dashboard/LiveEnvironmentalMap";
@@ -17,6 +18,7 @@ import { SourceApportionmentCard } from "@/components/dashboard/SourceApportionm
 import SubmitComplaint from "@/pages/SubmitComplaint";
 import OilSpillDetection from "@/pages/OilSpillDetection";
 import CarbonFootprint from "@/pages/CarbonFootprint";
+import Medcare from "@/pages/Medcare";
 
 function DashboardHome() {
   return (
@@ -34,9 +36,25 @@ function DashboardHome() {
   );
 }
 
+function SidebarAutoCollapse() {
+  const { setOpen } = useSidebar();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname.includes("/medcare")) {
+      setOpen(false);
+    } else {
+      setOpen(true);
+    }
+  }, [location.pathname, setOpen]);
+
+  return null;
+}
+
 export default function CitizenDashboard() {
   return (
     <SidebarProvider>
+      <SidebarAutoCollapse />
       <div className="flex min-h-screen w-full">
         <CitizenSidebar />
         <div className="flex flex-1 flex-col">
@@ -65,6 +83,7 @@ export default function CitizenDashboard() {
               <Route path="complaint" element={<SubmitComplaint />} />
               <Route path="oil-spill" element={<OilSpillDetection />} />
               <Route path="carbon-footprint" element={<CarbonFootprint />} />
+              <Route path="medcare" element={<Medcare />} />
             </Routes>
           </main>
         </div>
