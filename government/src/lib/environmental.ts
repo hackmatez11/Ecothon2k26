@@ -289,8 +289,7 @@ export async function fetchOpenAQReadings(
   
   for (const radiusKm of radii) {
     try {
-      const sentinelBase = import.meta.env.VITE_SENTINEL_API_URL ?? 'http://localhost:8000';
-      const url = `${sentinelBase}/openaq?lat=${lat}&lng=${lng}&radius=${radiusKm * 1000}&limit=20`;
+      const url = `${SENTINEL_API_URL}/openaq?lat=${lat}&lng=${lng}&radius=${radiusKm * 1000}&limit=20`;
 
       const res = await fetch(url, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`OpenAQ ${res.status}`);
@@ -373,8 +372,7 @@ export async function fetchPredictionData(city: string, lat?: number | null, lng
     }
 
     if (resolvedLat && resolvedLng) {
-      const sentinelBase = import.meta.env.VITE_SENTINEL_API_URL ?? 'http://localhost:8000';
-      const url = `${sentinelBase}/predict?lat=${resolvedLat}&lng=${resolvedLng}`;
+      const url = `${SENTINEL_API_URL}/predict?lat=${resolvedLat}&lng=${resolvedLng}`;
       const res = await fetch(url);
       if (res.ok) {
         return await res.json();
@@ -387,8 +385,7 @@ export async function fetchPredictionData(city: string, lat?: number | null, lng
 }
 
 export const fetchSentinelForecast = async (lat: number, lng: number): Promise<ForecastResponse> => {
-  const sentinelBase = import.meta.env.VITE_SENTINEL_API_URL ?? 'http://localhost:8000';
-  const res = await fetch(`${sentinelBase}/predict?lat=${lat}&lng=${lng}`);
+  const res = await fetch(`${SENTINEL_API_URL}/predict?lat=${lat}&lng=${lng}`);
   if (!res.ok) throw new Error(`Sentinel API error: ${res.status}`);
   return res.json();
 };

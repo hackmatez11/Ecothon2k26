@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScanSearch, Upload, MapPin, AlertTriangle, Loader2, Factory, Wind, Info, Satellite } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_SENTINEL_API_URL ?? "http://localhost:8000";
 
 interface KilnResult {
   latitude: number; longitude: number; emission_score: number; severity: string;
