@@ -45,6 +45,7 @@ import WasteOfficers from "./pages/officers/WasteOfficers";
 import ForestOfficers from "./pages/officers/ForestOfficers";
 import SoilConservationOfficers from "./pages/officers/SoilConservationOfficers";
 import HealthCareOfficers from "./pages/officers/HealthCareOfficers";
+import WasteDetection from "./pages/WasteDetection";
 import HospitalManagement from "./pages/HospitalManagement";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/soil-conservation" element={<SoilConservationDashboard />} />
             <Route path="/healthcare" element={<HealthCareDashboard />} />
             <Route path="/hospital-management" element={<HospitalManagement />} />
+            <Route path="/waste-detection" element={<WasteDetection />} />
             
             <Route path="/citizen-complaints/:dept" element={<CitizenComplaints />} />
             

@@ -20,6 +20,8 @@ import OilSpillDetection from "@/pages/OilSpillDetection";
 import CarbonFootprint from "@/pages/CarbonFootprint";
 import Medcare from "@/pages/Medcare";
 import AppointmentBooking from "@/pages/AppointmentBooking";
+import EcoRoutes from "@/pages/EcoRoutes";
+import EcoScan from "@/pages/EcoScan";
 
 function DashboardHome() {
   return (
@@ -42,7 +44,7 @@ function SidebarAutoCollapse() {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname.includes("/medcare") || location.pathname.includes("/appointment")) {
+    if (location.pathname.includes("/medcare") || location.pathname.includes("/appointment") || location.pathname.includes("/eco-routes") || location.pathname.includes("/eco-scan")) {
       setOpen(false);
     } else {
       setOpen(true);
@@ -86,6 +88,8 @@ export default function CitizenDashboard() {
               <Route path="carbon-footprint" element={<CarbonFootprint />} />
               <Route path="medcare" element={<Medcare />} />
               <Route path="appointment" element={<AppointmentBooking />} />
+              <Route path="eco-routes" element={<EcoRoutes />} />
+              <Route path="eco-scan" element={<EcoScan />} />
             </Routes>
           </main>
         </div>

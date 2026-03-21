@@ -250,6 +250,14 @@ export const departments: Department[] = [
         stats: "AI Planning"
       },
       {
+        title: "Waste Detection",
+        description: "AI-powered waste detection and classification system",
+        icon: Trash2,
+        color: "bg-orange-500",
+        path: "/waste-detection",
+        stats: "AI Powered"
+      },
+      {
         title: "Officer Management",
         description: "Manage department officers and their responsibilities",
         icon: Users,
