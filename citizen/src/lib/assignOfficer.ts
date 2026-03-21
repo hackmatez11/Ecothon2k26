@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { sendAssignmentEmail } from "../../../government/src/lib/emailService";
+import { sendAssignmentEmail } from "./emailService";
 
 // Maps citizen-side department keys to officer table department values
 const DEPT_MAP: Record<string, string> = {
