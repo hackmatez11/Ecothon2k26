@@ -19,6 +19,7 @@ import SubmitComplaint from "@/pages/SubmitComplaint";
 import OilSpillDetection from "@/pages/OilSpillDetection";
 import CarbonFootprint from "@/pages/CarbonFootprint";
 import Medcare from "@/pages/Medcare";
+import AppointmentBooking from "@/pages/AppointmentBooking";
 
 function DashboardHome() {
   return (
@@ -41,7 +42,7 @@ function SidebarAutoCollapse() {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname.includes("/medcare")) {
+    if (location.pathname.includes("/medcare") || location.pathname.includes("/appointment")) {
       setOpen(false);
     } else {
       setOpen(true);
@@ -84,6 +85,7 @@ export default function CitizenDashboard() {
               <Route path="oil-spill" element={<OilSpillDetection />} />
               <Route path="carbon-footprint" element={<CarbonFootprint />} />
               <Route path="medcare" element={<Medcare />} />
+              <Route path="appointment" element={<AppointmentBooking />} />
             </Routes>
           </main>
         </div>

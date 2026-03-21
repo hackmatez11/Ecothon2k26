@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Map, TrendingUp, Search,
-  Shield, AlertCircle, LogOut, User, Sprout, Leaf, HeartPulse
+  Shield, AlertCircle, LogOut, User, Sprout, Leaf, HeartPulse, CalendarCheck
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,6 +22,7 @@ const items = [
   { title: "Government Actions", url: "/citizen-dashboard/actions", icon: Shield },
   { title: "Carbon Footprint", url: "/citizen-dashboard/carbon-footprint", icon: Leaf },
   { title: "Medcare", url: "/citizen-dashboard/medcare", icon: HeartPulse },
+  { title: "Appointment Booking", url: "/citizen-dashboard/appointment", icon: CalendarCheck },
 ];
 
 export function CitizenSidebar() {
