@@ -16,7 +16,11 @@ import {
   Loader2, 
   Brain,
   Download,
-  Printer
+  Printer,
+  Pencil,
+  Save,
+  X,
+  Plus
 } from "lucide-react";
 import { analyzeImageWithPrompt } from "../services/groqVision";
 import { toast } from "sonner";
@@ -51,6 +55,8 @@ const SiteTransformation = () => {
   const [results, setResults] = useState<SiteTransformationPlan | null>(null);
   const [afterImage, setAfterImage] = useState<string | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<SiteTransformationPlan | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -108,6 +114,25 @@ const SiteTransformation = () => {
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleStartEdit = () => {
+    if (!results) return;
+    setDraft(JSON.parse(JSON.stringify(results)));
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setDraft(null);
+  };
+
+  const handleSavePlan = () => {
+    if (!draft) return;
+    setResults(draft);
+    setIsEditing(false);
+    setDraft(null);
+    toast.success("Transformation plan updated successfully!");
   };
 
   const generateAfterImage = async (sourceImage: string, siteType: string) => {
@@ -424,6 +449,37 @@ const SiteTransformation = () => {
                 </Card>
 
                 {/* MAIN PLAN BODY */}
+                {/* Edit toolbar */}
+                <div className="flex items-center justify-between px-2 no-print">
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-400/50">Master Plan Document</p>
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button
+                          onClick={handleSavePlan}
+                          className="flex items-center gap-2 h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider"
+                        >
+                          <Save className="h-3.5 w-3.5" /> Save Plan
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className="flex items-center gap-2 h-9 px-4 rounded-xl border-neutral-700 text-neutral-400 hover:text-white text-xs font-black uppercase tracking-wider"
+                        >
+                          <X className="h-3.5 w-3.5" /> Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={handleStartEdit}
+                        className="flex items-center gap-2 h-9 px-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-black uppercase tracking-wider"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit Plan
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="bg-white text-[#0A0A0A] rounded-[2rem] shadow-2xl overflow-hidden border-[16px] border-neutral-900 min-h-[800px] flex flex-col md:flex-row print:border-none print:shadow-none">
                   {/* SIDEBAR - RESOURCES & PERMISSIONS */}
                   <div className="md:w-80 bg-neutral-50 border-r border-neutral-200 p-8 space-y-12">
@@ -432,12 +488,49 @@ const SiteTransformation = () => {
                         <Hammer className="h-4 w-4" /> Operational Resources
                       </h3>
                       <div className="space-y-4">
-                        {results.resources.map((res, i) => (
-                          <div key={i} className="flex justify-between items-start">
-                            <span className="text-sm font-bold text-neutral-600">{res.item}</span>
-                            <span className="text-xs font-black bg-neutral-200 px-2 py-0.5 rounded">{res.quantity}</span>
+                        {(isEditing ? draft! : results).resources.map((res, i) => (
+                          <div key={i} className="flex justify-between items-start gap-2">
+                            {isEditing && draft ? (
+                              <>
+                                <input
+                                  value={res.item}
+                                  onChange={e => {
+                                    const resources = draft.resources.map((r, idx) => idx === i ? { ...r, item: e.target.value } : r);
+                                    setDraft({ ...draft, resources });
+                                  }}
+                                  className="flex-1 text-sm font-bold text-neutral-600 border border-neutral-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <input
+                                  value={res.quantity}
+                                  onChange={e => {
+                                    const resources = draft.resources.map((r, idx) => idx === i ? { ...r, quantity: e.target.value } : r);
+                                    setDraft({ ...draft, resources });
+                                  }}
+                                  className="w-20 text-xs font-black bg-neutral-200 border border-neutral-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <button
+                                  onClick={() => setDraft({ ...draft, resources: draft.resources.filter((_, idx) => idx !== i) })}
+                                  className="text-red-400 hover:text-red-600 transition-colors"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-sm font-bold text-neutral-600">{res.item}</span>
+                                <span className="text-xs font-black bg-neutral-200 px-2 py-0.5 rounded">{res.quantity}</span>
+                              </>
+                            )}
                           </div>
                         ))}
+                        {isEditing && draft && (
+                          <button
+                            onClick={() => setDraft({ ...draft, resources: [...draft.resources, { item: '', quantity: '' }] })}
+                            className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-500 transition-colors mt-2"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Add Resource
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -446,22 +539,81 @@ const SiteTransformation = () => {
                         <FileCheck className="h-4 w-4" /> Permits & Clearances
                       </h3>
                       <div className="space-y-6">
-                        {results.requiredPermissions.map((perm, i) => (
+                        {(isEditing ? draft! : results).requiredPermissions.map((perm, i) => (
                           <div key={i} className="space-y-1">
-                            <p className="text-[10px] font-black uppercase text-emerald-600 tracking-tighter">{perm.department}</p>
-                            <p className="text-sm font-black">{perm.document}</p>
-                            <p className="text-[10px] text-neutral-500 leading-tight">{perm.reason}</p>
+                            {isEditing && draft ? (
+                              <div className="space-y-1">
+                                <input
+                                  value={perm.department}
+                                  onChange={e => {
+                                    const perms = draft.requiredPermissions.map((p, idx) => idx === i ? { ...p, department: e.target.value } : p);
+                                    setDraft({ ...draft, requiredPermissions: perms });
+                                  }}
+                                  placeholder="Department"
+                                  className="w-full text-[10px] font-black uppercase text-emerald-600 border border-neutral-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <input
+                                  value={perm.document}
+                                  onChange={e => {
+                                    const perms = draft.requiredPermissions.map((p, idx) => idx === i ? { ...p, document: e.target.value } : p);
+                                    setDraft({ ...draft, requiredPermissions: perms });
+                                  }}
+                                  placeholder="Document"
+                                  className="w-full text-sm font-black border border-neutral-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                                <div className="flex gap-1">
+                                  <input
+                                    value={perm.reason}
+                                    onChange={e => {
+                                      const perms = draft.requiredPermissions.map((p, idx) => idx === i ? { ...p, reason: e.target.value } : p);
+                                      setDraft({ ...draft, requiredPermissions: perms });
+                                    }}
+                                    placeholder="Reason"
+                                    className="flex-1 text-[10px] text-neutral-500 border border-neutral-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                  <button
+                                    onClick={() => setDraft({ ...draft, requiredPermissions: draft.requiredPermissions.filter((_, idx) => idx !== i) })}
+                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-[10px] font-black uppercase text-emerald-600 tracking-tighter">{perm.department}</p>
+                                <p className="text-sm font-black">{perm.document}</p>
+                                <p className="text-[10px] text-neutral-500 leading-tight">{perm.reason}</p>
+                              </>
+                            )}
                           </div>
                         ))}
+                        {isEditing && draft && (
+                          <button
+                            onClick={() => setDraft({ ...draft, requiredPermissions: [...draft.requiredPermissions, { department: '', document: '', reason: '' }] })}
+                            className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-500 transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Add Permit
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     <div className="pt-8 border-t border-neutral-200 mt-auto">
                       <div className="bg-emerald-950 p-6 rounded-2xl text-emerald-400 shadow-xl">
                         <p className="text-[9px] font-black uppercase tracking-widest mb-2 opacity-60">Ecological Dividend</p>
-                        <p className="text-xs font-bold leading-relaxed italic">
-                          "{results.environmentalImpact}"
-                        </p>
+                        {isEditing && draft ? (
+                          <textarea
+                            value={draft.environmentalImpact}
+                            onChange={e => setDraft({ ...draft, environmentalImpact: e.target.value })}
+                            rows={3}
+                            className="w-full text-xs font-bold bg-emerald-900/50 border border-emerald-700 rounded-lg px-2 py-1 text-emerald-300 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          />
+                        ) : (
+                          <p className="text-xs font-bold leading-relaxed italic">
+                            "{results.environmentalImpact}"
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -481,8 +633,39 @@ const SiteTransformation = () => {
                           <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">
                             Urban <br /> Restoration
                           </h2>
-                          <div className="flex items-center gap-2 mt-4 text-neutral-500 font-bold italic">
-                            <MapPin className="h-4 w-4" /> {results.location}
+                          <div className="flex items-center gap-4 mt-4 flex-wrap">
+                            <div className="flex items-center gap-2 text-neutral-500 font-bold italic">
+                              <MapPin className="h-4 w-4" /> {results.location}
+                            </div>
+                            {isEditing && draft ? (
+                              <div className="flex gap-3">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4 text-blue-500" />
+                                  <input
+                                    value={draft.totalTimeline}
+                                    onChange={e => setDraft({ ...draft, totalTimeline: e.target.value })}
+                                    className="text-sm font-bold border border-neutral-300 rounded px-2 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <IndianRupee className="h-4 w-4 text-amber-500" />
+                                  <input
+                                    value={draft.totalCostEstimate}
+                                    onChange={e => setDraft({ ...draft, totalCostEstimate: e.target.value })}
+                                    className="text-sm font-bold border border-neutral-300 rounded px-2 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex gap-4">
+                                <div className="flex items-center gap-1.5 text-neutral-500 font-bold">
+                                  <Clock className="h-4 w-4 text-blue-500" /> {results.totalTimeline}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-neutral-500 font-bold">
+                                  <IndianRupee className="h-4 w-4 text-amber-500" /> {results.totalCostEstimate}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="w-24 h-24 border-8 border-neutral-100 rounded-full flex items-center justify-center text-neutral-100 flex-shrink-0">
@@ -491,25 +674,105 @@ const SiteTransformation = () => {
                       </header>
 
                       <div className="space-y-12">
-                        {results.phases.map((phase, i) => (
+                        {(isEditing ? draft! : results).phases.map((phase, i) => (
                           <div key={i} className="group transition-all">
                             <div className="flex items-end justify-between mb-4">
                               <div className="flex items-baseline gap-4">
                                 <span className="text-5xl font-black text-neutral-200 group-hover:text-emerald-500 transition-colors">0{i+1}</span>
-                                <h4 className="text-2xl font-black uppercase tracking-tighter">{phase.name}</h4>
+                                {isEditing && draft ? (
+                                  <input
+                                    value={phase.name}
+                                    onChange={e => {
+                                      const phases = draft.phases.map((p, idx) => idx === i ? { ...p, name: e.target.value } : p);
+                                      setDraft({ ...draft, phases });
+                                    }}
+                                    className="text-2xl font-black uppercase tracking-tighter border-b-2 border-neutral-300 bg-transparent focus:outline-none focus:border-emerald-500 w-48"
+                                  />
+                                ) : (
+                                  <h4 className="text-2xl font-black uppercase tracking-tighter">{phase.name}</h4>
+                                )}
                               </div>
-                              <span className="text-sm font-bold bg-neutral-100 px-4 py-1 rounded-full">{phase.duration}</span>
+                              {isEditing && draft ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    value={phase.duration}
+                                    onChange={e => {
+                                      const phases = draft.phases.map((p, idx) => idx === i ? { ...p, duration: e.target.value } : p);
+                                      setDraft({ ...draft, phases });
+                                    }}
+                                    className="text-sm font-bold bg-neutral-100 border border-neutral-300 px-3 py-1 rounded-full w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                  <button
+                                    onClick={() => setDraft({ ...draft, phases: draft.phases.filter((_, idx) => idx !== i) })}
+                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-sm font-bold bg-neutral-100 px-4 py-1 rounded-full">{phase.duration}</span>
+                              )}
                             </div>
                             <ul className="space-y-3 pl-20">
                               {phase.activities.map((act, j) => (
                                 <li key={j} className="text-sm font-medium text-neutral-600 flex items-center gap-3">
                                   <div className="w-1.5 h-1.5 bg-neutral-900 rounded-full flex-shrink-0" />
-                                  {act}
+                                  {isEditing && draft ? (
+                                    <div className="flex-1 flex items-center gap-2">
+                                      <input
+                                        value={act}
+                                        onChange={e => {
+                                          const phases = draft.phases.map((p, pidx) => pidx === i
+                                            ? { ...p, activities: p.activities.map((a, aidx) => aidx === j ? e.target.value : a) }
+                                            : p
+                                          );
+                                          setDraft({ ...draft, phases });
+                                        }}
+                                        className="flex-1 text-sm font-medium text-neutral-600 border-b border-neutral-300 bg-transparent focus:outline-none focus:border-emerald-500"
+                                      />
+                                      <button
+                                        onClick={() => {
+                                          const phases = draft.phases.map((p, pidx) => pidx === i
+                                            ? { ...p, activities: p.activities.filter((_, aidx) => aidx !== j) }
+                                            : p
+                                          );
+                                          setDraft({ ...draft, phases });
+                                        }}
+                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ) : act}
                                 </li>
                               ))}
+                              {isEditing && draft && (
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      const phases = draft.phases.map((p, pidx) => pidx === i
+                                        ? { ...p, activities: [...p.activities, ''] }
+                                        : p
+                                      );
+                                      setDraft({ ...draft, phases });
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-500 transition-colors"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" /> Add Activity
+                                  </button>
+                                </li>
+                              )}
                             </ul>
                           </div>
                         ))}
+                        {isEditing && draft && (
+                          <button
+                            onClick={() => setDraft({ ...draft, phases: [...draft.phases, { name: '', duration: '', activities: [''] }] })}
+                            className="flex items-center gap-2 text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors border-2 border-dashed border-emerald-300 rounded-2xl px-6 py-3 w-full justify-center"
+                          >
+                            <Plus className="h-4 w-4" /> Add Phase
+                          </button>
+                        )}
                       </div>
 
                       <footer className="pt-12 border-t border-neutral-100 flex flex-wrap gap-4 no-print">
