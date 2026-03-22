@@ -6,7 +6,7 @@ import { generateAndSaveResolutionPlan, ResolutionPlan } from '@/lib/resolutionP
 import {
   AlertCircle, MapPin, Clock, Mail, Loader2, Inbox,
   RefreshCw, Sparkles, ChevronDown, ChevronUp, CheckCircle2,
-  Link2, ListChecks, Timer, Wrench, Mic, Phone
+  Link2, ListChecks, Timer, Wrench, Mic, Phone, Pencil, Save, X, Plus, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,6 +79,10 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
   const [generatingPlan, setGeneratingPlan] = useState<string | null>(null); // complaint id
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
   const [livePlans, setLivePlans] = useState<Record<string, ResolutionPlan>>({});
+
+  const [editingPlan, setEditingPlan] = useState<string | null>(null); // complaint id being edited
+  const [editedPlans, setEditedPlans] = useState<Record<string, ResolutionPlan>>({}); // draft edits
+  const [savingPlan, setSavingPlan] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'supabase' | 'voice'>('supabase');
   const [voiceComplaints, setVoiceComplaints] = useState<VoiceBotComplaint[]>([]);
@@ -170,6 +174,42 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
       fetchComplaints();
     } catch (e: any) {
       toast.error('Failed to update status: ' + e.message);
+    }
+  };
+
+  const handleStartEdit = (complaintId: string, currentPlan: ResolutionPlan) => {
+    setEditedPlans(prev => ({ ...prev, [complaintId]: JSON.parse(JSON.stringify(currentPlan)) }));
+    setEditingPlan(complaintId);
+  };
+
+  const handleCancelEdit = (complaintId: string) => {
+    setEditingPlan(null);
+    setEditedPlans(prev => { const n = { ...prev }; delete n[complaintId]; return n; });
+  };
+
+  const handleSaveEditedPlan = async (complaint: ExtendedComplaint) => {
+    const draft = editedPlans[complaint.id];
+    if (!draft) return;
+    setSavingPlan(complaint.id);
+    try {
+      const { error: err } = await supabase
+        .from('complaints')
+        .update({
+          resolution_plan: draft.summary,
+          resolution_steps: draft.steps,
+          expected_timeline: draft.expected_timeline,
+        })
+        .eq('id', complaint.id);
+      if (err) throw err;
+      setLivePlans(prev => ({ ...prev, [complaint.id]: draft }));
+      setEditingPlan(null);
+      setEditedPlans(prev => { const n = { ...prev }; delete n[complaint.id]; return n; });
+      fetchComplaints();
+      toast.success('Resolution plan saved');
+    } catch (e: any) {
+      toast.error('Failed to save plan: ' + e.message);
+    } finally {
+      setSavingPlan(null);
     }
   };
 
@@ -371,6 +411,18 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
             const planRefs = livePlan?.references ?? [];
             const planBy = complaint.plan_generated_by;
             const planAt = complaint.plan_generated_at;
+            const isEditing = editingPlan === complaint.id;
+            const isSaving = savingPlan === complaint.id;
+            const draft = editedPlans[complaint.id];
+            const activePlan: ResolutionPlan = {
+              summary: planSummary,
+              steps: planSteps,
+              expected_timeline: planTimeline,
+              resources_needed: planResources,
+              references: planRefs,
+              initial_score: livePlan?.initial_score ?? 0,
+              target_score: livePlan?.target_score ?? 0,
+            };
 
             return (
               <Card key={complaint.id} className="border-border overflow-hidden">
@@ -471,51 +523,171 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
                         <div className="flex items-center gap-2">
                           <ListChecks className="w-4 h-4 text-violet-400 shrink-0" />
                           <span className="text-sm font-semibold text-foreground">Resolution Plan</span>
+                          {isEditing && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">Editing</span>}
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          {planTimeline && (
-                            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 font-medium">
-                              <Timer className="w-3 h-3" />{planTimeline}
-                            </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {!isEditing && (
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              {planTimeline && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 font-medium">
+                                  <Timer className="w-3 h-3" />{planTimeline}
+                                </span>
+                              )}
+                              {planBy && <span>By: {planBy}</span>}
+                              {planAt && <span>{formatDate(planAt)}</span>}
+                            </div>
                           )}
-                          {planBy && <span>By: {planBy}</span>}
-                          {planAt && <span>{formatDate(planAt)}</span>}
+                          {!isEditing ? (
+                            <button
+                              onClick={() => handleStartEdit(complaint.id, activePlan)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 text-xs font-medium transition-colors"
+                            >
+                              <Pencil className="w-3 h-3" /> Edit Plan
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleSaveEditedPlan(complaint)}
+                                disabled={isSaving}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-semibold transition-colors"
+                              >
+                                {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                {isSaving ? 'Saving...' : 'Save Plan'}
+                              </button>
+                              <button
+                                onClick={() => handleCancelEdit(complaint.id)}
+                                disabled={isSaving}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 text-xs text-muted-foreground transition-colors"
+                              >
+                                <X className="w-3 h-3" /> Cancel
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Summary */}
-                      {planSummary && (
+                      {isEditing && draft ? (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Summary</label>
+                          <textarea
+                            value={draft.summary}
+                            onChange={e => setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, summary: e.target.value } }))}
+                            rows={3}
+                            className="w-full text-sm bg-background/60 border border-border rounded-lg px-3 py-2 text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+                          />
+                        </div>
+                      ) : planSummary ? (
                         <p className="text-sm text-foreground/90 leading-relaxed">{planSummary}</p>
+                      ) : null}
+
+                      {/* Timeline (edit mode) */}
+                      {isEditing && draft && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Expected Timeline</label>
+                          <input
+                            type="text"
+                            value={draft.expected_timeline}
+                            onChange={e => setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, expected_timeline: e.target.value } }))}
+                            className="w-full text-sm bg-background/60 border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                          />
+                        </div>
                       )}
 
                       {/* Steps */}
-                      {planSteps.length > 0 && (
+                      {(isEditing ? draft?.steps ?? [] : planSteps).length > 0 && (
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Action Steps</p>
                           <div className="space-y-2">
-                            {planSteps.map((step, i) => (
+                            {(isEditing ? draft?.steps ?? [] : planSteps).map((step, i) => (
                               <div key={i} className="flex gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
                                 <div className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0 mt-0.5">
                                   <span className="text-xs font-bold text-violet-400">{step.step}</span>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <p className="text-sm font-medium text-foreground">{step.title}</p>
-                                    <div className="flex gap-2 text-xs text-muted-foreground">
-                                      <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{step.duration}</span>
-                                      <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{step.responsible}</span>
-                                    </div>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  {isEditing && draft ? (
+                                    <>
+                                      <input
+                                        value={step.title}
+                                        onChange={e => {
+                                          const steps = draft.steps.map((s, idx) => idx === i ? { ...s, title: e.target.value } : s);
+                                          setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps } }));
+                                        }}
+                                        placeholder="Step title"
+                                        className="w-full text-sm font-medium bg-background/60 border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                      />
+                                      <textarea
+                                        value={step.description}
+                                        onChange={e => {
+                                          const steps = draft.steps.map((s, idx) => idx === i ? { ...s, description: e.target.value } : s);
+                                          setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps } }));
+                                        }}
+                                        rows={2}
+                                        placeholder="Description"
+                                        className="w-full text-xs bg-background/60 border border-border rounded px-2 py-1 text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                      />
+                                      <div className="flex gap-2">
+                                        <input
+                                          value={step.duration}
+                                          onChange={e => {
+                                            const steps = draft.steps.map((s, idx) => idx === i ? { ...s, duration: e.target.value } : s);
+                                            setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps } }));
+                                          }}
+                                          placeholder="Duration"
+                                          className="flex-1 text-xs bg-background/60 border border-border rounded px-2 py-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                        />
+                                        <input
+                                          value={step.responsible}
+                                          onChange={e => {
+                                            const steps = draft.steps.map((s, idx) => idx === i ? { ...s, responsible: e.target.value } : s);
+                                            setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps } }));
+                                          }}
+                                          placeholder="Responsible"
+                                          className="flex-1 text-xs bg-background/60 border border-border rounded px-2 py-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                        />
+                                        <button
+                                          onClick={() => {
+                                            const steps = draft.steps.filter((_, idx) => idx !== i).map((s, idx) => ({ ...s, step: idx + 1 }));
+                                            setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps } }));
+                                          }}
+                                          className="p-1 rounded text-red-400 hover:bg-red-500/10 transition-colors"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <p className="text-sm font-medium text-foreground">{step.title}</p>
+                                        <div className="flex gap-2 text-xs text-muted-foreground">
+                                          <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{step.duration}</span>
+                                          <span className="flex items-center gap-1"><Wrench className="w-3 h-3" />{step.responsible}</span>
+                                        </div>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             ))}
                           </div>
+                          {isEditing && draft && (
+                            <button
+                              onClick={() => {
+                                const newStep = { step: draft.steps.length + 1, title: '', description: '', duration: '', responsible: '' };
+                                setEditedPlans(prev => ({ ...prev, [complaint.id]: { ...draft, steps: [...draft.steps, newStep] } }));
+                              }}
+                              className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors mt-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Add Step
+                            </button>
+                          )}
                         </div>
                       )}
 
                       {/* Resources */}
-                      {planResources.length > 0 && (
+                      {!isEditing && planResources.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Resources Needed</p>
                           <div className="flex flex-wrap gap-2">
@@ -529,7 +701,7 @@ export default function CitizenComplaints({ department }: CitizenComplaintsProps
                       )}
 
                       {/* References */}
-                      {planRefs.length > 0 && (
+                      {!isEditing && planRefs.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Web References</p>
                           <div className="space-y-1">
