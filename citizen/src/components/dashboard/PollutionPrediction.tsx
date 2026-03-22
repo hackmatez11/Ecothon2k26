@@ -78,8 +78,8 @@ export function PollutionPrediction() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card>
+    <div className="space-y-4">
+    <div className="grid gap-4 md:grid-cols-2">      <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-4 w-4 text-primary" /> Air Pollution Forecast (7 Days)
@@ -173,6 +173,7 @@ export function PollutionPrediction() {
           </div>
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }

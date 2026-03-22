@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Plus, Loader2, MapPin, Search } from "lucide-react";
+import { Loader2, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { fetchSourceAttribution, fetchControlPlan, SourceAttributionResponse, ControlPlanItem } from "@/lib/environmental";
+import { fetchSourceAttribution, fetchAQIData, SourceAttributionResponse } from "@/lib/environmental";
+import { ControlPlan } from "@/components/ControlPlan";
 
 
 const COMPARISON_CITIES = ["Delhi", "Mumbai", "Kolkata", "Chennai"];
@@ -15,27 +16,25 @@ const PollutionSources = () => {
   const [searchInput, setSearchInput] = useState("Delhi");
   const [sourceData, setSourceData] = useState<SourceAttributionResponse | null>(null);
   const [cityData, setCityData] = useState<any[] | null>(null);
-  const [actions, setActions] = useState<ControlPlanItem[] | null>(null);
+  const [currentAQI, setCurrentAQI] = useState<number>(0);
 
   useEffect(() => {
     async function loadData() {
       setSourceData(null);
       setCityData(null);
-      setActions(null);
-      
-      // Load current city pie chart data
-      const data = await fetchSourceAttribution(city);
+
+      // Load current city source data and AQI concurrently
+      const [data, aqiData] = await Promise.all([
+        fetchSourceAttribution(city),
+        fetchAQIData(city),
+      ]);
       setSourceData(data);
-      if (data && data.sources) {
-        // Load AI generated control plans
-        const planData = await fetchControlPlan(city, data.sources);
-        setActions(planData);
-      }
+      setCurrentAQI(aqiData?.aqi ?? 0);
 
       // Load comparison bar chart data for multiple cities concurrently
       const comparisonPromises = COMPARISON_CITIES.map(c => fetchSourceAttribution(c));
       const comparisonResults = await Promise.all(comparisonPromises);
-      
+
       const mappedCityData = comparisonResults.map((res, index) => {
         if (!res) return null;
         return {
@@ -46,7 +45,7 @@ const PollutionSources = () => {
           burning: res.sources.find(s => s.name === "Waste Burning")?.value || 0,
         };
       }).filter(Boolean);
-      
+
       setCityData(mappedCityData);
     }
     loadData();
@@ -82,7 +81,6 @@ const PollutionSources = () => {
               Analyze City
             </Button>
           </form>
-          <Button><Plus className="mr-2 h-4 w-4" /> Create Control Plan</Button>
         </div>
       </div>
 
@@ -171,40 +169,11 @@ const PollutionSources = () => {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="py-4 border-b bg-muted/30">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-bold">Recommended Control Plans</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {!actions ? (
-            <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
-               <Loader2 className="h-8 w-8 animate-spin mb-4" />
-               <p className="text-sm">Analyzing pollution source data...</p>
-               <p className="text-xs opacity-70 mt-2 text-center max-w-[250px]">Generating optimal mitigation strategies based on Live Data</p>
-            </div>
-          ) : actions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
-               <p className="text-sm">Action generation failed. Please try again later.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {actions.map((a, i) => (
-                <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <p className="font-medium text-foreground">{a.action}</p>
-                    <p className="text-sm text-muted-foreground">Targeting Source: <span className="font-semibold">{a.source}</span></p>
-                  </div>
-                  <span className={`gov-badge shrink-0 ms-4 ${a.status === "Active" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
-                    {a.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ControlPlan
+        aqi={currentAQI}
+        city={city}
+        sources={sourceData?.sources ?? []}
+      />
     </div>
   );
 };

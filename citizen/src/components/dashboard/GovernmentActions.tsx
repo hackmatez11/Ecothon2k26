@@ -1,21 +1,222 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend 
 } from "recharts";
 import { 
-  CheckCircle, ShieldCheck, Zap, TrendingDown, 
-  Clock, MapPin, User, ChevronRight, Activity, Award
+  ShieldCheck, Zap, TrendingDown, 
+  MapPin, User, ChevronRight, Activity, Award,
+  AlertTriangle, Factory, Car, Flame, Leaf,
+  ChevronDown, ChevronUp, Calendar,
 } from "lucide-react";
 import { supabase, Complaint } from "@/lib/supabase";
+import { useProfile } from "@/hooks/useProfile";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
 
+// ── Control Plan types ─────────────────────────────────────────────────────────
+interface ControlMeasure {
+  source: string;
+  contribution: number;
+  color: string;
+  priority: "Critical" | "High" | "Medium";
+  shortTerm: string[];
+  longTerm: string[];
+  responsible: string;
+  expectedReduction: string;
+}
+
+interface PlanData {
+  summary: string;
+  overallPriority: "Critical" | "High" | "Moderate";
+  measures: ControlMeasure[];
+  immediateActions: string[];
+}
+
+interface SavedControlPlan {
+  id: string;
+  title: string;
+  city: string;
+  aqi_at_generation: number;
+  plan_data: PlanData;
+  created_at: string;
+  updated_at: string;
+}
+
+const PRIORITY_STYLES: Record<string, string> = {
+  Critical: "bg-red-500/15 text-red-400 border-red-500/30",
+  High:     "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  Medium:   "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  Moderate: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+};
+
+const SOURCE_ICONS: Record<string, any> = {
+  vehicular: Car, traffic: Car, industrial: Factory,
+  construction: Zap, waste: Flame, burning: Flame, dust: AlertTriangle,
+};
+
+function getSourceIcon(name: string) {
+  const key = name.toLowerCase();
+  for (const [k, Icon] of Object.entries(SOURCE_ICONS)) {
+    if (key.includes(k)) return Icon;
+  }
+  return Leaf;
+}
+
+// ── Read-only collapsible plan card ───────────────────────────────────────────
+function CitizenPlanCard({ saved, defaultExpanded = false }: { saved: SavedControlPlan; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const plan = saved.plan_data;
+
+  const overallBg = plan.overallPriority === "Critical"
+    ? "border-red-500/30 bg-red-500/5"
+    : plan.overallPriority === "High"
+    ? "border-orange-500/30 bg-orange-500/5"
+    : "border-yellow-500/30 bg-yellow-500/5";
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      {/* Header */}
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-semibold truncate block">{saved.title}</span>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <Badge variant="outline" className={`text-[10px] uppercase ${PRIORITY_STYLES[plan.overallPriority]}`}>
+              {plan.overallPriority}
+            </Badge>
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              {new Date(saved.created_at).toLocaleDateString()}
+            </span>
+            <span className="text-[10px] text-muted-foreground">AQI {saved.aqi_at_generation}</span>
+          </div>
+        </div>
+        {expanded
+          ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+          : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+      </div>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div className="border-t px-4 py-4 space-y-5">
+          {/* Summary */}
+          <div className={`rounded-lg border p-4 ${overallBg}`}>
+            <p className="text-sm text-foreground/90 leading-relaxed">{plan.summary}</p>
+          </div>
+
+          {/* Immediate actions */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Immediate Actions (This Week)
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {plan.immediateActions.map((action, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2">
+                  <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-bold">
+                    {i + 1}
+                  </span>
+                  <span className="text-xs text-foreground/80">{action}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Source measures */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Source-Specific Measures
+            </p>
+            <div className="space-y-3">
+              {plan.measures.map((m, i) => {
+                const Icon = getSourceIcon(m.source);
+                return (
+                  <div key={i} className="rounded-lg border bg-background overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 py-3 border-b bg-muted/20">
+                      <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${m.color}25`, border: `1.5px solid ${m.color}60` }}>
+                        <Icon className="h-3.5 w-3.5" style={{ color: m.color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{m.source}</span>
+                          <Badge variant="outline" className={`text-[10px] ${PRIORITY_STYLES[m.priority]}`}>
+                            {m.priority}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {m.contribution}% contribution · Expected reduction: {m.expectedReduction}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-muted-foreground">Responsible</p>
+                        <p className="text-[11px] font-medium text-foreground/80">{m.responsible}</p>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Short-term (0–3 months)</p>
+                        <ul className="space-y-1">
+                          {m.shortTerm.map((a, j) => (
+                            <li key={j} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
+                              {a}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Long-term (6–24 months)</p>
+                        <ul className="space-y-1">
+                          {m.longTerm.map((a, j) => (
+                            <li key={j} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full shrink-0 opacity-60" style={{ backgroundColor: m.color }} />
+                              {a}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GovernmentActions() {
+  const { profile } = useProfile();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<Complaint | null>(null);
+  const [controlPlans, setControlPlans] = useState<SavedControlPlan[]>([]);
+  const [controlPlanLoading, setControlPlanLoading] = useState(true);
+
+  // Fetch all pollution control plans for citizen's city
+  useEffect(() => {
+    const city = profile?.city;
+    if (!city) { setControlPlanLoading(false); return; }
+    setControlPlanLoading(true);
+    supabase
+      .from("control_plans")
+      .select("id, title, city, aqi_at_generation, plan_data, created_at, updated_at")
+      .eq("city", city.toLowerCase().trim())
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setControlPlans((data ?? []) as SavedControlPlan[]);
+        setControlPlanLoading(false);
+      })
+      .catch(() => setControlPlanLoading(false));
+  }, [profile?.city]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -118,6 +319,41 @@ export function GovernmentActions() {
           </motion.div>
         ))}
       </div>
+
+      {/* Pollution Control Plans */}
+      {(controlPlanLoading || controlPlans.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <ShieldCheck className="h-5 w-5 text-emerald-500" />
+            <h3 className="font-semibold text-lg">Pollution Control Plans</h3>
+            {controlPlans.length > 0 && (
+              <Badge variant="secondary" className="text-[10px]">
+                {controlPlans.length} plan{controlPlans.length > 1 ? "s" : ""}
+              </Badge>
+            )}
+            {controlPlans.length > 0 && (
+              <span className="text-[11px] text-muted-foreground ml-1">
+                for {controlPlans[0].city.charAt(0).toUpperCase() + controlPlans[0].city.slice(1)}
+              </span>
+            )}
+          </div>
+
+          {controlPlanLoading ? (
+            <Card className="border-white/5 bg-white/5">
+              <CardContent className="flex items-center justify-center h-24 gap-2 text-muted-foreground">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm">Loading control plans...</span>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {controlPlans.map((p, i) => (
+                <CitizenPlanCard key={p.id} saved={p} defaultExpanded={i === 0} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Plans list + Action Plan detail */}
       <div className="grid gap-6 lg:grid-cols-7">
