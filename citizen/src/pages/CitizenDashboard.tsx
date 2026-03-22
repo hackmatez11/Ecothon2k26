@@ -14,7 +14,6 @@ import { EcoBot } from "@/components/dashboard/EcoBot";
 import { EnvironmentalAlerts } from "@/components/dashboard/EnvironmentalAlerts";
 import { SoilAnalysis } from "@/components/dashboard/SoilAnalysis";
 import { CityAQIAreas } from "@/components/dashboard/CityAQIAreas";
-import { SourceApportionmentCard } from "@/components/dashboard/SourceApportionmentCard";
 import SubmitComplaint from "@/pages/SubmitComplaint";
 import OilSpillDetection from "@/pages/OilSpillDetection";
 import CarbonFootprint from "@/pages/CarbonFootprint";
@@ -30,7 +29,6 @@ function DashboardHome() {
       <LocalPollutionStatus />
       
       <CityAQIAreas />
-      <SourceApportionmentCard />
       
       <EnvironmentalAlerts />
       <PollutionPrediction />

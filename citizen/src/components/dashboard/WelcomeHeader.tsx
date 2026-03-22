@@ -1,8 +1,8 @@
-import { MapPin, Wind, Droplets, AlertTriangle, Loader2 } from "lucide-react";
+import { MapPin, Wind, Droplets, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { useEffect, useState } from "react";
-import { fetchAQIData, AQIData, STATIC_ALERTS, simulateWaterQuality, WaterQualityData } from "@/lib/environmental";
+import { fetchAQIData, AQIData, simulateWaterQuality, WaterQualityData } from "@/lib/environmental";
 
 const statusColors = {
   safe: "bg-status-safe/10 text-status-safe border-status-safe/20",
@@ -38,8 +38,6 @@ export function WelcomeHeader() {
     }
   }, [profile, profileLoading]);
 
-  const totalAlerts = STATIC_ALERTS.length + (aqiData && aqiData.aqi > 100 ? 1 : 0);
-
   const statusCards = [
     { 
       title: "Air Quality", 
@@ -55,7 +53,6 @@ export function WelcomeHeader() {
       icon: Droplets, 
       status: (waterData?.status.toLowerCase() || "safe") as any 
     },
-    { title: "Active Alerts", value: `${totalAlerts} Alerts`, metric: "In your area", icon: AlertTriangle, status: totalAlerts > 0 ? "danger" : "safe" as const },
   ];
 
   if (profileLoading || loading) {
@@ -83,7 +80,7 @@ export function WelcomeHeader() {
           <Wind className="h-32 w-32" />
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {statusCards.map((card) => (
           <Card key={card.title} className={`border ${statusColors[card.status]}`}>
             <CardContent className="flex items-center gap-4 p-4">

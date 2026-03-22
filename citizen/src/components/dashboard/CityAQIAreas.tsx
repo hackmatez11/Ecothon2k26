@@ -199,6 +199,7 @@ export function CityAQIAreas() {
   const [areas, setAreas] = useState<AreaAQI[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(false);
   const [city, setCity] = useState<string>("");
   const [forecastDay, setForecastDay] = useState(0);
 
@@ -214,7 +215,13 @@ export function CityAQIAreas() {
       const data = await fetchCityAreasAQI(cityName);
       setAreas(data);
     } catch (e: any) {
-      setError(e.message || "Failed to fetch AQI data");
+      const msg: string = e.message || "Failed to fetch AQI data";
+      // Hide section on Tavily auth/quota errors (4xx) instead of showing error UI
+      if (/tavily error: 4\d\d/i.test(msg)) {
+        setHidden(true);
+        return;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -228,6 +235,8 @@ export function CityAQIAreas() {
   }, [profile, profileLoading]);
 
   const dayLabels = ["Now", ...(areas[0]?.forecast.map((f) => f.day) ?? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])];
+
+  if (hidden) return null;
 
   return (
     <div className="space-y-6">
