@@ -2,6 +2,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageCircle, Info, TrendingUp, AlertCircle } from "lucide-react";
 import { departments } from "@/lib/departments";
 import { useNavigate } from "react-router-dom";
+import { ChangePasswordButton } from "@/components/ChangePasswordButton";
+
+// Map department path for each generic dashboard
+const DEPT_PATHS: Record<string, string> = {
+  "Agricultural Department": "/agricultural",
+  "Waste Department": "/waste",
+  "Forest Department": "/forest",
+  "Soil Conservation Department": "/soil-conservation",
+  "HealthCare Department": "/healthcare",
+};
 
 interface GenericDashboardProps {
   title: string;
@@ -15,12 +25,15 @@ const GenericDashboard = ({ title }: GenericDashboardProps) => {
 
   return (
     <div className="space-y-6">
-      <div className={`p-6 rounded-xl border border-white/10 ${deptData.color.replace('bg-', 'bg-')}/10 shadow-sm`}>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <deptData.icon className={`h-6 w-6 ${deptData.color.replace('bg-', 'text-')}`} />
-          {deptData.title}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">{deptData.description}</p>
+      <div className={`p-6 rounded-xl border border-white/10 ${deptData.color.replace('bg-', 'bg-')}/10 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <deptData.icon className={`h-6 w-6 ${deptData.color.replace('bg-', 'text-')}`} />
+            {deptData.title}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">{deptData.description}</p>
+        </div>
+        <ChangePasswordButton deptPath={DEPT_PATHS[deptData.title] ?? "/"} deptName={deptData.title} />
       </div>
 
 

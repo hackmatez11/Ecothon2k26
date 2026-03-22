@@ -13,6 +13,7 @@ import {
   fetchAQIData, fetchOpenAQReadings, fetchIndustrialSiteCount, resolveCityCoords,
   getAQIColor, AQIData, OpenAQReading,
 } from "@/lib/environmental";
+import { ChangePasswordButton } from "@/components/ChangePasswordButton";
 
 const complianceData = [
   { month: "Jan", compliant: 45, nonCompliant: 12 },
@@ -117,6 +118,7 @@ const IndustrialRegulationDashboard = () => {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NEMAP Regulatory Compliance & Enforcement Division</p>
         </div>
+        <ChangePasswordButton deptPath="/industrial-regulation" deptName="Industrial Regulation Department" />
       </div>
 
       {/* Live City Pollution Search */}

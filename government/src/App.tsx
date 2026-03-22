@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DepartmentAuthProvider } from "@/contexts/DepartmentAuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import DashboardLayout from "./components/DashboardLayout";
@@ -53,6 +54,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <DepartmentAuthProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -106,6 +108,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </DepartmentAuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -9,18 +9,39 @@ import {
   BarChart3
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubItem, useSidebar,
   SidebarHeader
 } from "@/components/ui/sidebar";
 import { departments } from "@/lib/departments";
+import { useState } from "react";
+import { DepartmentPasswordModal } from "@/components/DepartmentPasswordModal";
+import { useDepartmentAuth } from "@/contexts/DepartmentAuthContext";
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isDeptUnlocked, unlockDept } = useDepartmentAuth();
+
+  const [pendingDept, setPendingDept] = useState<{ path: string; title: string } | null>(null);
+
+  const handleDeptClick = (e: React.MouseEvent, dept: { path: string; title: string }) => {
+    if (isDeptUnlocked(dept.path)) return; // already unlocked, let normal nav happen
+    e.preventDefault();
+    setPendingDept(dept);
+  };
+
+  const handlePasswordSuccess = () => {
+    if (pendingDept) {
+      unlockDept(pendingDept.path);
+      navigate(pendingDept.path);
+      setPendingDept(null);
+    }
+  };
 
   // Identify active department based on URL
   const activeDept = departments.find(dept => 
@@ -31,6 +52,7 @@ export function AppSidebar() {
   const isMainHub = location.pathname === "/dashboard" || !activeDept;
 
   return (
+    <>
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar shadow-xl">
       <SidebarHeader className="p-4 border-b border-sidebar-border/50">
         {activeDept && !isMainHub ? (
@@ -156,19 +178,29 @@ export function AppSidebar() {
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-2">
-                  {departments.filter(d => d.title !== "Administration Department").map((dept) => (
-                    <SidebarMenuItem key={dept.title} className="mb-2">
-                      <SidebarMenuButton asChild>
-                        <NavLink to={dept.path} className="group hover:bg-sidebar-accent/50 transition-colors" activeClassName="bg-sidebar-accent text-sidebar-primary font-bold shadow-sm">
-                          <div className={`mr-2 p-1 rounded-md ${dept.color} bg-opacity-10 group-hover:bg-opacity-20 transition-all`}>
-                            <dept.icon className={`h-4 w-4 ${dept.color.replace('bg-', 'text-')}`} />
-                          </div>
-                          {!collapsed && <span className="flex-1">{dept.title}</span>}
-                          {!collapsed && <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                  {departments.filter(d => d.title !== "Administration Department").map((dept) => {
+                    const unlocked = isDeptUnlocked(dept.path);
+                    return (
+                      <SidebarMenuItem key={dept.title} className="mb-2">
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={dept.path}
+                            className="group hover:bg-sidebar-accent/50 transition-colors"
+                            activeClassName="bg-sidebar-accent text-sidebar-primary font-bold shadow-sm"
+                            onClick={(e) => handleDeptClick(e, dept)}
+                          >
+                            <div className={`mr-2 p-1 rounded-md ${dept.color} bg-opacity-10 group-hover:bg-opacity-20 transition-all`}>
+                              <dept.icon className={`h-4 w-4 ${dept.color.replace('bg-', 'text-')}`} />
+                            </div>
+                            {!collapsed && <span className="flex-1">{dept.title}</span>}
+                            {!collapsed && (
+                              <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                            )}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -191,5 +223,15 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
+    {pendingDept && (
+      <DepartmentPasswordModal
+        open={!!pendingDept}
+        departmentName={pendingDept.title}
+        deptPath={pendingDept.path}
+        onSuccess={handlePasswordSuccess}
+        onCancel={() => setPendingDept(null)}
+      />
+    )}
+  </>
   );
 }

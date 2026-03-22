@@ -3,6 +3,7 @@ import { ClipboardList, Wallet, TrendingUp, Users, Clock, CheckCircle, AlertTria
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
+import { ChangePasswordButton } from "@/components/ChangePasswordButton";
 
 const budgetData = [
   { month: "Jan", allocated: 450, spent: 380 },
@@ -41,6 +42,7 @@ const AdministrationDashboard = () => {
           <button className="px-4 py-2 bg-white text-purple-600 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors shadow-sm flex items-center gap-2">
             <Users className="h-4 w-4" /> Manage Staff
           </button>
+          <ChangePasswordButton deptPath="/administration" deptName="Administration Department" />
         </div>
       </div>
 

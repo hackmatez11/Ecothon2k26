@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AqiMap } from "@/components/AqiMap";
 import { SatelliteMap } from "@/components/SatelliteMap";
+import { ChangePasswordButton } from "@/components/ChangePasswordButton";
 
 const trendData = [
   { day: "Jan", aqi: 180 }, { day: "Feb", aqi: 160 }, { day: "Mar", aqi: 140 },
@@ -152,6 +153,7 @@ const EnvironmentalDashboard = () => {
               Set City
             </button>
           </form>
+          <ChangePasswordButton deptPath="/environmental" deptName="Environmental Department" />
         </div>
       </div>
 

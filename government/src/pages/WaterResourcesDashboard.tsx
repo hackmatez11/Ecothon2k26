@@ -3,6 +3,7 @@ import { Droplets, Ship, AlertTriangle, Activity, MessageCircle } from "lucide-r
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { departments } from "@/lib/departments";
+import { ChangePasswordButton } from "@/components/ChangePasswordButton";
 
 const waterQualityData = [
   { month: "Jan", quality: 72, contamination: 28 },
@@ -40,6 +41,7 @@ const WaterResourcesDashboard = () => {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">NEMAP Water Quality & Resource Management</p>
         </div>
+        <ChangePasswordButton deptPath="/water-resources" deptName="Water Resources Department" />
       </div>
 
 
