@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, Wind, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
 import { AQIHeatmap } from "./AQIHeatmap";
+import { supabase } from "@/lib/supabase";
 
 const TAVILY_KEY = import.meta.env.VITE_TAVILY_API_KEY;
 const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
@@ -76,7 +76,6 @@ async function groqAnalyze(prompt: string): Promise<string> {
 }
 
 async function fetchCityAreasAQI(city: string): Promise<AreaAQI[]> {
-  // Step 1: Use Tavily to find 7 famous/important areas in the city
   const areasRaw = await tavilySearch(
     `famous localities neighborhoods areas in ${city} India list`
   );
@@ -104,7 +103,6 @@ ${areasRaw.slice(0, 3000)}`;
     areas = [`${city} Central`, `${city} North`, `${city} South`, `${city} East`, `${city} West`, `${city} Industrial Zone`, `${city} Airport`];
   }
 
-  // Step 2: For each area, search current AQI + 7-day forecast via Tavily, then parse with Groq
   const results: AreaAQI[] = await Promise.all(
     areas.slice(0, 12).map(async (area) => {
       try {
@@ -168,6 +166,31 @@ ${aqiRaw.slice(0, 2500)}`;
   return results;
 }
 
+// --- Supabase helpers ---
+
+async function loadFromDB(city: string): Promise<{ areas: AreaAQI[]; fetchedAt: string } | null> {
+  const { data, error } = await supabase
+    .from("city_aqi_data")
+    .select("areas, fetched_at")
+    .eq("city", city.toLowerCase())
+    .order("fetched_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) return null;
+  return { areas: data.areas as AreaAQI[], fetchedAt: data.fetched_at };
+}
+
+async function saveToDB(city: string, areas: AreaAQI[]): Promise<void> {
+  // Upsert by city — one row per city, always overwrite with latest
+  await supabase.from("city_aqi_data").upsert(
+    { city: city.toLowerCase(), areas, fetched_at: new Date().toISOString() },
+    { onConflict: "city" }
+  );
+}
+
+// --- UI helpers ---
+
 function TrendIcon({ trend }: { trend: AreaAQI["trend"] }) {
   if (trend === "up") return <TrendingUp className="h-3.5 w-3.5 text-red-400" />;
   if (trend === "down") return <TrendingDown className="h-3.5 w-3.5 text-emerald-400" />;
@@ -193,37 +216,58 @@ function MiniSparkline({ forecast }: { forecast: { day: string; aqi: number }[] 
 }
 
 export function CityAQIAreas() {
-  if (!TAVILY_AVAILABLE) return null;
 
   const { profile, loading: profileLoading } = useProfile();
   const [areas, setAreas] = useState<AreaAQI[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false); // fresh fetch from Tavily
   const [error, setError] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
   const [city, setCity] = useState<string>("");
   const [forecastDay, setForecastDay] = useState(0);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
   const cityCenter: [number, number] = [
     profile?.latitude ?? 28.6139,
     profile?.longitude ?? 77.209,
   ];
 
-  const load = async (cityName: string) => {
+  // Load cached data from DB on page load
+  const loadCached = async (cityName: string) => {
     setLoading(true);
+    setError(null);
+    try {
+      const cached = await loadFromDB(cityName);
+      if (cached) {
+        setAreas(cached.areas);
+        setFetchedAt(cached.fetchedAt);
+      }
+    } catch {
+      // silently ignore DB errors on initial load
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch fresh data from Tavily+Groq and save to DB
+  const fetchLatest = async (cityName: string) => {
+    setFetching(true);
     setError(null);
     try {
       const data = await fetchCityAreasAQI(cityName);
       setAreas(data);
+      const now = new Date().toISOString();
+      setFetchedAt(now);
+      await saveToDB(cityName, data);
     } catch (e: any) {
       const msg: string = e.message || "Failed to fetch AQI data";
-      // Hide section on Tavily auth/quota errors (4xx) instead of showing error UI
       if (/tavily error: 4\d\d/i.test(msg)) {
         setHidden(true);
         return;
       }
       setError(msg);
     } finally {
-      setLoading(false);
+      setFetching(false);
     }
   };
 
@@ -231,49 +275,81 @@ export function CityAQIAreas() {
     if (profileLoading) return;
     const c = profile?.city || "Delhi";
     setCity(c);
-    load(c);
+    loadCached(c);
   }, [profile, profileLoading]);
 
   const dayLabels = ["Now", ...(areas[0]?.forecast.map((f) => f.day) ?? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])];
+
+  const formattedFetchedAt = fetchedAt
+    ? new Date(fetchedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    : null;
 
   if (hidden) return null;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold text-foreground">
-            AQI Across Key Areas — {city}
-          </h2>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">
+              AQI Across Key Areas — {city}
+            </h2>
+          </div>
+          {formattedFetchedAt && (
+            <span className="text-[11px] text-muted-foreground pl-7">
+              Last updated: {formattedFetchedAt}
+            </span>
+          )}
         </div>
         <button
-          onClick={() => city && load(city)}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          onClick={() => city && fetchLatest(city)}
+          disabled={fetching || loading}
+          className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+          {fetching ? "Fetching..." : "Get Latest Data"}
         </button>
       </div>
 
+      {/* Initial DB load spinner */}
       {loading && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 py-12">
           <Loader2 className="h-7 w-7 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Searching web for live AQI data across {city}...</p>
-          <p className="text-xs text-muted-foreground/60">Using Tavily deep search + Groq AI analysis</p>
+          <p className="text-sm text-muted-foreground">Loading cached AQI data...</p>
         </div>
       )}
 
-      {error && !loading && (
+      {/* Fresh fetch spinner (shown over existing cards) */}
+      {fetching && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Searching web for live AQI data across {city} via Tavily + Groq...
+        </div>
+      )}
+
+      {error && !fetching && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400">
           {error}. Make sure your Tavily API key is set in <code>.env</code> as <code>VITE_TAVILY_API_KEY</code>.
         </div>
       )}
 
-      {!loading && !error && areas.length > 0 && (
+      {!loading && areas.length === 0 && !fetching && !error && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 py-12">
+          <p className="text-sm text-muted-foreground">No cached data yet.</p>
+          <button
+            onClick={() => city && fetchLatest(city)}
+            className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Get Latest Data
+          </button>
+        </div>
+      )}
+
+      {areas.length > 0 && (
         <>
-          {/* Heatmap section */}
+          {/* Heatmap */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -281,7 +357,6 @@ export function CityAQIAreas() {
                   <Wind className="h-4 w-4 text-primary" />
                   AQI Heatmap — {city}
                 </CardTitle>
-                {/* Day selector */}
                 <div className="flex gap-1 flex-wrap">
                   {dayLabels.map((label, i) => (
                     <button
