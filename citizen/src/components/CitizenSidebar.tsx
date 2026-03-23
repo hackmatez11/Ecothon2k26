@@ -25,6 +25,7 @@ const items = [
   { title: "Appointment Booking", url: "/citizen-dashboard/appointment", icon: CalendarCheck },
   { title: "EcoRoutes", url: "/citizen-dashboard/eco-routes", icon: Route },
   { title: "EcoScan", url: "/citizen-dashboard/eco-scan", icon: ScanSearch },
+  { title: "GOBOT Complaint", url: "/citizen-dashboard/gov-bot", icon: Shield },
 ];
 
 export function CitizenSidebar() {

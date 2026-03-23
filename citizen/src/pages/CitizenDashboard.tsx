@@ -21,6 +21,7 @@ import Medcare from "@/pages/Medcare";
 import AppointmentBooking from "@/pages/AppointmentBooking";
 import EcoRoutes from "@/pages/EcoRoutes";
 import EcoScan from "@/pages/EcoScan";
+import GovBotComplaint from "@/pages/GovBotComplaint";
 
 function DashboardHome() {
   return (
@@ -88,6 +89,7 @@ export default function CitizenDashboard() {
               <Route path="appointment" element={<AppointmentBooking />} />
               <Route path="eco-routes" element={<EcoRoutes />} />
               <Route path="eco-scan" element={<EcoScan />} />
+              <Route path="gov-bot" element={<GovBotComplaint />} />
             </Routes>
           </main>
         </div>

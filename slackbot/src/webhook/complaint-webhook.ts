@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { AgentManager } from '../agents/agent-manager';
 import { prisma } from '../database/prisma.service';
 import { logger } from '../utils/logger';
@@ -10,6 +11,7 @@ import { config } from '../config';
  */
 export function createComplaintWebhook(agentManager: AgentManager) {
   const app = express();
+  app.use(cors());
   app.use(express.json());
 
   // ── POST /api/complaint — Submit new complaint from citizen portal ─────────
