@@ -1,0 +1,159 @@
+// Government Interdepartment Citizen Complaint Resolution System
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Government officer linked to a Slack user and department
+model GovOfficer {
+  id            String              @id @default(uuid())
+  email         String              @unique
+  name          String
+  department    String              // Environment, WaterSupply, Roads, HealthSanitation, Supervisor
+  designation   String?
+  phoneNumber   String?
+  slackUserId   String              @unique
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  complaints           Complaint[]           @relation("AssignedOfficer")
+  documentsFulfilled   DeptDocumentRequest[] @relation("FulfilledBy")
+  auditLogs            AuditLog[]
+
+  @@map("gov_officers")
+}
+
+// Citizen complaint submitted via the citizen portal
+model Complaint {
+  id              String            @id @default(uuid())
+  citizenName     String
+  citizenPhone    String?
+  citizenEmail    String?
+  category        String            // factory_smoke, pothole, sewage_overflow, water_quality, garbage, etc.
+  description     String
+  location        String
+  attachmentUrl   String?
+  priority        String            @default("medium") // low, medium, high, urgent
+  status          String            @default("received") // received, triaged, in_progress, blocked_on_docs, resolved, closed
+  assignedDept    String?           // Environment, WaterSupply, Roads, HealthSanitation
+  assignedOfficerId String?
+  resolvedAt      DateTime?
+  resolutionNote  String?
+
+  // Portal tracking
+  portalTicketId  String?           @unique
+  notifyCallback  String?           // webhook URL to notify citizen portal on status change
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  officer         GovOfficer?       @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+  updates         ComplaintUpdate[]
+  docRequests     DeptDocumentRequest[]
+
+  @@map("complaints")
+  @@index([status, assignedDept])
+  @@index([citizenPhone])
+}
+
+// Status trail for each complaint
+model ComplaintUpdate {
+  id            String    @id @default(uuid())
+  complaintId   String
+  updatedBy     String    // agent name or officer name
+  status        String    // new status
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  complaint     Complaint @relation(fields: [complaintId], references: [id])
+
+  @@map("complaint_updates")
+  @@index([complaintId, createdAt])
+}
+
+// Cross-department document/permission request
+model DeptDocumentRequest {
+  id                String    @id @default(uuid())
+  complaintId       String
+  fromDept          String    // requesting department
+  toDept            String    // department being asked
+  documentNeeded    String    // e.g. "river pollution data", "NOC", "pipeline map"
+  requestMessage    String    // full message sent to the dept channel
+  deadline          DateTime?
+  status            String    @default("pending") // pending, fulfilled, rejected
+  fulfillmentNote   String?   // response from the dept
+  slackMessageTs    String?   // Slack message timestamp for the request
+  slackChannelId    String?   // Slack channel where request was posted
+  fulfilledById     String?
+  fulfilledAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  complaint         Complaint   @relation(fields: [complaintId], references: [id])
+  fulfilledBy       GovOfficer? @relation("FulfilledBy", fields: [fulfilledById], references: [id])
+
+  @@map("dept_document_requests")
+  @@index([complaintId, status])
+  @@index([toDept, status])
+}
+
+// Inter-agent asynchronous message queue
+model AgentMessage {
+  id              String    @id @default(uuid())
+  fromAgent       String
+  toAgent         String
+  intent          String
+  payload         Json
+  status          String    @default("pending") // pending, processing, processed, failed
+  processedAt     DateTime?
+  result          Json?
+  errorMessage    String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("agent_messages")
+  @@index([toAgent, status])
+}
+
+// RAG vector memory embeddings
+model MemoryEmbedding {
+  id        String   @id @default(uuid())
+  content   String
+  embedding String   // JSON array of floats
+  source    String   // slack, complaint, agent_message, doc_request
+  sourceId  String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@map("memory_embeddings")
+  @@index([source, sourceId])
+}
+
+// Audit log for all agent and officer actions
+model AuditLog {
+  id          String      @id @default(uuid())
+  officerId   String?
+  agentName   String?
+  action      String
+  resource    String?
+  resourceId  String?
+  details     Json?
+  ipAddress   String?
+
+  createdAt   DateTime    @default(now())
+
+  officer     GovOfficer? @relation(fields: [officerId], references: [id])
+
+  @@map("audit_logs")
+  @@index([officerId, createdAt])
+  @@index([agentName, createdAt])
+}
