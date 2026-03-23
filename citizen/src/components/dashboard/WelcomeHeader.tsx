@@ -1,4 +1,4 @@
-import { MapPin, Wind, Droplets, Loader2 } from "lucide-react";
+import { MapPin, Wind, Droplets, Loader2, Wifi, WifiOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProfile } from "@/hooks/useProfile";
 import { useEffect, useState } from "react";
@@ -38,22 +38,16 @@ export function WelcomeHeader() {
     }
   }, [profile, profileLoading]);
 
-  const statusCards = [
-    { 
-      title: "Air Quality", 
-      value: aqiData?.category || "N/A", 
-      metric: aqiData && aqiData.aqi > 0 ? `AQI ${aqiData.aqi}` : "No Sensor Data", 
-      icon: Wind, 
-      status: aqiData && aqiData.aqi > 0 ? (aqiData.aqi < 100 ? "safe" : aqiData.aqi < 200 ? "moderate" : "danger") : "safe" as const 
-    },
-    { 
-      title: "Water Quality", 
-      value: waterData?.status || "Good", 
-      metric: waterData ? `pH ${waterData.ph} (${waterData.label})` : "pH 7.0 (Stable)", 
-      icon: Droplets, 
-      status: (waterData?.status.toLowerCase() || "safe") as any 
-    },
-  ];
+  const aqiStatus = !aqiData || aqiData.aqi === 0
+    ? "safe"
+    : aqiData.category === 'Good'
+      ? "safe"
+      : aqiData.category === 'Moderate'
+        ? "moderate"
+        : "danger";
+
+  const isLive = aqiData?.source === 'openaq';
+  const hasData = aqiData && aqiData.aqi > 0;
 
   if (profileLoading || loading) {
     return (
@@ -81,18 +75,46 @@ export function WelcomeHeader() {
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        {statusCards.map((card) => (
-          <Card key={card.title} className={`border ${statusColors[card.status]}`}>
-            <CardContent className="flex items-center gap-4 p-4">
-              <card.icon className="h-8 w-8 shrink-0" />
-              <div>
-                <p className="text-sm font-medium">{card.title}</p>
-                <p className="text-lg font-bold">{card.value}</p>
-                <p className="text-xs opacity-70">{card.metric}</p>
+        {/* Air Quality Card */}
+        <Card className={`border ${statusColors[aqiStatus]}`}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <Wind className="h-8 w-8 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">Air Quality</p>
+                {isLive ? (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-status-safe/20 text-status-safe">
+                    <Wifi className="h-2.5 w-2.5" /> LIVE
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    <WifiOff className="h-2.5 w-2.5" /> Est.
+                  </span>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <p className="text-lg font-bold">{hasData ? aqiData!.category : "N/A"}</p>
+              <p className="text-xs opacity-70">
+                {hasData
+                  ? `AQI ${aqiData!.aqi}${aqiData!.pm25 > 0 ? ` · PM2.5 ${aqiData!.pm25} µg/m³` : ""}`
+                  : "No sensor data"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Water Quality Card */}
+        <Card className={`border ${statusColors[(waterData?.status.toLowerCase() || "safe") as keyof typeof statusColors]}`}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <Droplets className="h-8 w-8 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Water Quality</p>
+              <p className="text-lg font-bold">{waterData?.status || "Good"}</p>
+              <p className="text-xs opacity-70">
+                {waterData ? `pH ${waterData.ph} (${waterData.label})` : "pH 7.0 (Stable)"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

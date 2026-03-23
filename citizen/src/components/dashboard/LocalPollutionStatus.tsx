@@ -54,38 +54,40 @@ export function LocalPollutionStatus() {
     {
       title: "PM2.5",
       icon: Wind,
-      value: hasRealData ? `${aqiData?.pm25} µg/m³` : "N/A",
-      label: hasRealData ? aqiData?.category : "No Sensor Data",
+      value: hasRealData ? `${aqiData!.pm25} µg/m³` : "N/A",
+      label: hasRealData ? aqiData!.category : "No Sensor Data",
       detail: "Fine particulate matter",
-      progress: hasRealData ? Math.min(100, (aqiData?.pm25 || 0) * 1.5) : 0,
-      status: !hasRealData ? "safe" : (aqiData?.pm25 || 0) < 35 ? "safe" : (aqiData?.pm25 || 0) < 75 ? "moderate" : "danger" as const,
+      progress: hasRealData ? Math.min(100, aqiData!.pm25 * 1.5) : 0,
+      status: !hasRealData ? "safe" : aqiData!.pm25 < 35 ? "safe" : aqiData!.pm25 < 75 ? "moderate" : "danger" as const,
     },
     {
       title: "PM10",
       icon: Wind,
-      value: hasRealData ? `${aqiData?.pm10} µg/m³` : "N/A",
+      value: hasRealData ? `${aqiData!.pm10} µg/m³` : "N/A",
       label: hasRealData ? "Concentration" : "Sensor Absent",
       detail: "Inhalable particles",
-      progress: hasRealData ? Math.min(100, (aqiData?.pm10 || 0)) : 0,
-      status: !hasRealData ? "safe" : (aqiData?.pm10 || 0) < 50 ? "safe" : (aqiData?.pm10 || 0) < 150 ? "moderate" : "danger" as const,
+      progress: hasRealData ? Math.min(100, aqiData!.pm10) : 0,
+      status: !hasRealData ? "safe" : aqiData!.pm10 < 50 ? "safe" : aqiData!.pm10 < 150 ? "moderate" : "danger" as const,
     },
     {
       title: "NO₂ & SO₂",
       icon: Wind,
-      value: hasRealData ? `${aqiData?.no2} / ${aqiData?.so2}` : "N/A",
-      label: hasRealData ? "NO₂ / SO₂ ppb" : "Gas Monitor Off",
+      // show actual units from the data source
+      value: hasRealData ? `${aqiData!.no2} / ${aqiData!.so2}` : "N/A",
+      label: hasRealData ? `NO₂ / SO₂ (${aqiData!.no2Unit})` : "Gas Monitor Off",
       detail: "Gaseous pollutants",
-      progress: hasRealData ? Math.min(100, (aqiData?.no2 || 0) * 2) : 0,
-      status: !hasRealData || (aqiData?.no2 || 0) < 40 ? "safe" : "moderate" as const,
+      progress: hasRealData ? Math.min(100, aqiData!.no2 * 0.5) : 0,
+      status: !hasRealData || aqiData!.no2 < 40 ? "safe" : aqiData!.no2 < 100 ? "moderate" : "danger" as const,
     },
     {
       title: "CO Levels",
       icon: Wind,
-      value: hasRealData ? `${aqiData?.co} mg/m³` : "N/A",
+      value: hasRealData ? `${aqiData!.co} ${aqiData!.coUnit}` : "N/A",
       label: hasRealData ? "Carbon Monoxide" : "CO Unknown",
       detail: "Combustion byproduct",
-      progress: hasRealData ? Math.min(100, (aqiData?.co || 0) * 10) : 0,
-      status: !hasRealData || (aqiData?.co || 0) < 4 ? "safe" : "moderate" as const,
+      // WHO safe limit: 10 mg/m³ (8h avg). Scale progress to that.
+      progress: hasRealData ? Math.min(100, (aqiData!.co / 10) * 100) : 0,
+      status: !hasRealData || aqiData!.co < 4 ? "safe" : aqiData!.co < 10 ? "moderate" : "danger" as const,
     },
   ];
 
@@ -93,7 +95,9 @@ export function LocalPollutionStatus() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Detailed Air Quality: {profile?.city || "New Delhi"}</h2>
-        <span className="text-xs text-muted-foreground italic">Source: OpenAQ</span>
+        <span className="text-xs text-muted-foreground italic">
+          Source: {aqiData?.source === 'openaq' ? 'OpenAQ (live)' : aqiData?.source === 'sentinel' ? 'Sentinel-5P (estimated)' : 'No data'}
+        </span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {pollutionData.map((item) => (

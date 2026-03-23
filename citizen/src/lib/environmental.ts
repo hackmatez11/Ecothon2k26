@@ -11,8 +11,12 @@ export interface AQIData {
   no2: number;
   so2: number;
   co: number;
+  no2Unit: string;
+  so2Unit: string;
+  coUnit: string;
   category: 'Good' | 'Moderate' | 'Unhealthy' | 'Hazardous';
   city: string;
+  source?: 'openaq' | 'sentinel' | 'mock';
 }
 
 export interface EnvironmentalAlert {
@@ -202,18 +206,70 @@ export async function fetchAQIData(city: string, lat?: number | null, lng?: numb
       }
 
       if (resolvedLat && resolvedLng) {
+        // 1st priority: real per-pollutant data from OpenAQ
+        try {
+          const readings = await fetchOpenAQReadings(resolvedLat, resolvedLng);
+          if (readings.length > 0) {
+            // Aggregate: prefer the reading with the most complete data
+            const best = readings.reduce((a, b) => {
+              const scoreA = [a.pm25, a.pm10, a.no2, a.so2, a.co].filter(v => v !== null).length;
+              const scoreB = [b.pm25, b.pm10, b.no2, b.so2, b.co].filter(v => v !== null).length;
+              return scoreB > scoreA ? b : a;
+            });
+
+            // Average non-null values across all readings for each pollutant
+            const avg = (key: keyof OpenAQReading) => {
+              const vals = readings.map(r => r[key] as number | null).filter((v): v is number => v !== null);
+              return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+            };
+
+            const pm25Val = avg('pm25') ?? best.pm25 ?? 0;
+            const pm10Val = avg('pm10') ?? best.pm10 ?? 0;
+            const no2Val  = avg('no2')  ?? best.no2  ?? 0;
+            const so2Val  = avg('so2')  ?? best.so2  ?? 0;
+            const coVal   = avg('co')   ?? best.co   ?? 0;
+            const aqi     = pm25Val > 0 ? pm25ToAQI(pm25Val) : best.aqi;
+
+            const result: AQIData = {
+              aqi:      Math.round(aqi),
+              pm25:     pm25Val,
+              pm10:     pm10Val,
+              no2:      no2Val,
+              so2:      so2Val,
+              co:       coVal,
+              no2Unit:  best.no2Unit ?? 'µg/m³',
+              so2Unit:  best.so2Unit ?? 'µg/m³',
+              coUnit:   'mg/m³',
+              category: getAQICategory(aqi),
+              city,
+              source:   'openaq',
+            };
+            aqiDataCache.set(cacheKey, { data: result, ts: Date.now() });
+            return result;
+          }
+        } catch (err) {
+          console.warn('OpenAQ readings fetch failed, falling back to Sentinel:', err);
+        }
+
+        // 2nd priority: Sentinel forecast (Open-Meteo european_aqi based)
         try {
           const forecast = await fetchSentinelForecast(resolvedLat, resolvedLng);
-          const currentAqi = forecast.current_aqi;
-          const result = {
-            aqi:      Math.round(currentAqi),
-            pm25:     Math.round(currentAqi * 0.6 * 10) / 10, // Simulated ratio
-            pm10:     Math.round(currentAqi * 0.9 * 10) / 10,
-            no2:      15.5,
-            so2:      2.1,
-            co:       0.8,
-            category: getAQICategory(currentAqi),
+          const eaqi = forecast.current_aqi; // This is European AQI (0–100+ scale)
+          // Normalize European AQI to approximate US AQI for consistent display
+          const usAqi = Math.round(eaqi * 2.5);
+          const result: AQIData = {
+            aqi:      usAqi,
+            pm25:     Math.round(usAqi * 0.6 * 10) / 10,
+            pm10:     Math.round(usAqi * 0.9 * 10) / 10,
+            no2:      Math.round(usAqi * 0.15 * 10) / 10,
+            so2:      Math.round(usAqi * 0.02 * 10) / 10,
+            co:       Math.round(usAqi * 0.008 * 10) / 10,
+            no2Unit:  'µg/m³',
+            so2Unit:  'µg/m³',
+            coUnit:   'mg/m³',
+            category: getEuropeanAQICategory(eaqi),
             city,
+            source:   'sentinel',
           };
           aqiDataCache.set(cacheKey, { data: result, ts: Date.now() });
           return result;
@@ -222,9 +278,8 @@ export async function fetchAQIData(city: string, lat?: number | null, lng?: numb
         }
       }
     } catch (err) {
-      console.warn('OpenAQ fetch failed:', err);
+      console.warn('AQI fetch failed:', err);
     } finally {
-      // Always cleanup pending map so future requests can proceed
       pendingAqiRequests.delete(cacheKey);
     }
 
@@ -265,6 +320,14 @@ export function getAQICategory(aqi: number): AQIData['category'] {
   return 'Hazardous';
 }
 
+/** Map European AQI (0–100+ scale from Open-Meteo) to our category */
+export function getEuropeanAQICategory(eaqi: number): AQIData['category'] {
+  if (eaqi <= 20) return 'Good';
+  if (eaqi <= 60) return 'Moderate';
+  if (eaqi <= 100) return 'Unhealthy';
+  return 'Hazardous';
+}
+
 export function getAQIColor(aqi: number): string {
   if (aqi <= 50) return '#10b981'; // Green (emerald-500)
   if (aqi <= 100) return '#f59e0b'; // Yellow (amber-500)
@@ -274,14 +337,11 @@ export function getAQIColor(aqi: number): string {
 
 function getMockAQIData(city: string): AQIData {
   return {
-    aqi: 0,
-    pm25: 0,
-    pm10: 0,
-    no2: 0,
-    so2: 0,
-    co: 0,
+    aqi: 0, pm25: 0, pm10: 0, no2: 0, so2: 0, co: 0,
+    no2Unit: 'µg/m³', so2Unit: 'µg/m³', coUnit: 'mg/m³',
     category: 'Good',
-    city: city || 'Unknown City'
+    city: city || 'Unknown City',
+    source: 'mock',
   };
 }
 
@@ -343,6 +403,12 @@ export interface OpenAQReading {
   no2: number | null;
   so2: number | null;
   co: number | null;
+  // units as reported by OpenAQ (e.g. 'µg/m³', 'ppb', 'ppm')
+  pm25Unit: string | null;
+  pm10Unit: string | null;
+  no2Unit: string | null;
+  so2Unit: string | null;
+  coUnit: string | null;
   parameter: string;
 }
 
@@ -379,19 +445,32 @@ export async function fetchOpenAQReadings(
           const pm25Sensor = sensors.find((s: any) => s.parameter?.name === 'pm25');
           const pm10Sensor = sensors.find((s: any) => s.parameter?.name === 'pm10');
           const no2Sensor  = sensors.find((s: any) => s.parameter?.name === 'no2');
+          const so2Sensor  = sensors.find((s: any) => s.parameter?.name === 'so2');
+          const coSensor   = sensors.find((s: any) => s.parameter?.name === 'co');
           const best       = pm25Sensor ?? pm10Sensor ?? no2Sensor ?? sensors[0];
 
           if (!best) return null;
 
           const param   = best.parameter?.name as string ?? 'unknown';
           const rawVal  = valueMap[best.id] ?? null;
-          const pm25Val = sensors.find((s: any) => s.parameter?.name === 'pm25') ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'pm25').id] ?? null) : null;
-          const pm10Val = sensors.find((s: any) => s.parameter?.name === 'pm10') ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'pm10').id] ?? null) : null;
-          const no2Val  = sensors.find((s: any) => s.parameter?.name === 'no2')  ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'no2').id] ?? null) : null;
-          const so2Val  = sensors.find((s: any) => s.parameter?.name === 'so2')  ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'so2').id] ?? null) : null;
-          const coVal   = sensors.find((s: any) => s.parameter?.name === 'co')   ? (valueMap[sensors.find((s: any) => s.parameter?.name === 'co').id] ?? null) : null;
+          const pm25Val = pm25Sensor ? (valueMap[pm25Sensor.id] ?? null) : null;
+          const pm10Val = pm10Sensor ? (valueMap[pm10Sensor.id] ?? null) : null;
+          const no2Val  = no2Sensor  ? (valueMap[no2Sensor.id]  ?? null) : null;
+          const so2Val  = so2Sensor  ? (valueMap[so2Sensor.id]  ?? null) : null;
+          const coRaw   = coSensor   ? (valueMap[coSensor.id]   ?? null) : null;
 
-          const aqi = pm25ToAQI(param === 'pm25' ? rawVal : rawVal * 0.6);
+          // OpenAQ reports CO in µg/m³ — convert to mg/m³ for display
+          const coVal = coRaw !== null ? Math.round((coRaw / 1000) * 100) / 100 : null;
+
+          // Normalize NO2/SO2: OpenAQ may report in µg/m³ or ppb depending on station
+          // Store raw value + unit so the UI can display correctly
+          const no2Unit = no2Sensor?.parameter?.units ?? 'µg/m³';
+          const so2Unit = so2Sensor?.parameter?.units ?? 'µg/m³';
+          const coUnit  = 'mg/m³'; // always display in mg/m³ after conversion
+
+          const aqi = pm25Val != null && pm25Val > 0
+            ? pm25ToAQI(pm25Val)
+            : rawVal != null ? pm25ToAQI(param === 'pm25' ? rawVal : rawVal * 0.6) : 0;
 
           return {
             lat:          loc.coordinates.latitude,
@@ -403,6 +482,11 @@ export async function fetchOpenAQReadings(
             no2:          no2Val,
             so2:          so2Val,
             co:           coVal,
+            pm25Unit:     pm25Sensor?.parameter?.units ?? 'µg/m³',
+            pm10Unit:     pm10Sensor?.parameter?.units ?? 'µg/m³',
+            no2Unit,
+            so2Unit,
+            coUnit,
             parameter:    param,
           } as OpenAQReading;
         })
